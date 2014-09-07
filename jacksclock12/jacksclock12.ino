@@ -1,9 +1,11 @@
 /* ================================================================================== //
 //
-//    Jack's 420 Clock - 2014
-//    Written for Arduino Uno Rev. 3
-//    Adafruit Hardware: Real Time Clock: DS1307, Neopixel (40 RGB-LED) Shield,
-//    7-Segment Display, 14-Segment Aphanumeric Display, Backlight Module      
+//    Jack's 420 Clock
+//
+//    *** TO DO ***
+//    * Clean up both switch functions
+//    * Auto Dim: Debounce / Smoothing
+//    * Fix RGB LED
 //
 // ================================================================================== */
 
@@ -16,6 +18,7 @@
 #include <Adafruit_NeoPixel.h>
 
 // Input/Output Pins
+<<<<<<< HEAD
 int photoCellIn =       A1;      // Auto Dimming
 int nightLightIn =      A2;      // Backlight
 int clockLightIn =      A3;      // 7-Sebment
@@ -41,13 +44,43 @@ int numReadings = 25;            // Smoothing function: # of Readings
 int neoBrightness = 100;         // Neopixel Shield
 boolean running = false;         // Colon On/Off
 //volatile int state = LOW;        // For Reminder Switch Interrupt
+=======
+int photoCellIn = A1;         // Auto Dimming
+int nightLightIn = A2;        // Backlight
+int clockLightIn = A3;        // 7-Sebment
+int NeoPixel = 6;             // RGB-LED: Green
+int uvLED = 7;                // LEDs: UV
+int reminderSwitchIn = 8;     // Reminder Switch *** NOT WORKING ***
+int fourTwentyLED = 9;        // LED: Green
+int piezoOut = 10;            // Speaker
+int nightLightOut = 11;       // Backlight
+int brightSwitchIn = 12;      // Auto Brightness
+int dstSwitchIn = 13;         // Savings Time Switch
+
+
+// Variables
+int clockKnob;                // Potentiometer 1
+int lightKnob;                // Potentiometer 2
+int clockBrightness;          // 7-Segment & Alphanumeric
+int lightBrightness;          // Backlight
+int dstState;                 // DST
+int reminderState;            // Switch (Reminder)
+int autoBrightState;          // Switch (Auto-Dimmer)
+int photoCellRead;            // Photo Cell
+int autoBrightAverage;        // Photo Cell
+long previousMillis;          // For counting of xfade timer
+int fourTwentyBright = 0;     // 420 LED
+int fadeAmount = 2;           // 420 LED
+boolean running = false;      // Colon On/Off
+int counter = 0;              // Counts notes played
+int numReadings = 25;         // Smoothing function: # of Readings
+>>>>>>> parent of 044ddaa... Many fixes + last working version before interrupts
 
 // Setup Components
 RTC_DS1307 RTC;
 Adafruit_7segment disp = Adafruit_7segment();
 Adafruit_AlphaNum4 alpha4 = Adafruit_AlphaNum4();
 Adafruit_NeoPixel strip = Adafruit_NeoPixel(60, NeoPixel, NEO_GRB + NEO_KHZ800);
-
 
 // ================================================================================== //
 //                                  *** SETUP ***
@@ -75,7 +108,6 @@ void setup()
   attachInterrupt(1, rainbowOff, LOW);                      // Interrupt
 }
 
-
 // ================================================================================== //
 //                                  *** LOOP ***
 // ================================================================================== //
@@ -87,7 +119,11 @@ void loop()
   blinkColon();                          // Blink Colon
   adjustBrightness();                    // Check Switch & Adjust brightness
   fourTwentyCheck();                     // Check if 4:20pm & Run Alarm
+<<<<<<< HEAD
   reminderSwitch();                      // LED / Reminder 
+=======
+  reminderSwitch();                      // LED / Reminder
+>>>>>>> parent of 044ddaa... Many fixes + last working version before interrupts
 }
 
 // ================================================================================== //
@@ -216,9 +252,19 @@ void fourTwentyWords()                                     // Writes "HIGH" & "T
 void reminderSwitch()                                   // Checks Switch & Activates LED
 {
   Serial.println(reminderState);                        // Turn back on when ready to test this function
-  disp.drawColon(true);
   reminderState = digitalRead(reminderSwitchIn);        // Check Reminder Switch
+<<<<<<< HEAD
   if (reminderState == HIGH) rainbowCycle(35);             // If On: Run Rainbow Crossfade
+=======
+  if (reminderState == 1)                               // If On: Run Crossfade Part 1 / 3
+  {
+  rainbowCycle(1);
+  }
+  else
+  {
+  strip.show();                                           // Initialize all pixels to 'off'
+  }  
+>>>>>>> parent of 044ddaa... Many fixes + last working version before interrupts
 }
 
 void rainbowOff()
@@ -243,7 +289,8 @@ void smooth()                                           // Cleans up photocell i
     total = total + readings[index];                    // add the reading to the total
     index = index + 1;                                  // advance to next position in array
 
-    if (index >= numReadings) index = 0;                           // if we're at the end of the array...
+    if (index >= numReadings)                           // if we're at the end of the array...
+      index = 0;
 
     average = total / numReadings;
     autoBrightAverage = average;
@@ -262,7 +309,7 @@ void beep(int note, int duration)                            // Creates Individu
     previousMillis = currentMillis;
 
     tone(piezoOut, note, duration);                          //Play tone on buzzerPin
-    if (counter % 2 == 0)                                    // Alternate Green then UV LED's
+    if (counter % 2 == 0)
     {
       digitalWrite(fourTwentyLED, HIGH);
       delay(duration);
@@ -275,16 +322,17 @@ void beep(int note, int duration)                            // Creates Individu
       digitalWrite(uvLED, LOW);
     }
     noTone(piezoOut);
-    counter++;    
+
+    counter++;    //Increment counter
   }
 }
 
 
-void rainbowCycle(uint8_t wait)                                                            // Runs rainbow led setup
-{
+void rainbowCycle(uint8_t wait)                                                               // Makes the rainbow equally distributed throughout
+{      
   uint16_t i, j;
-  for (j = 0; j < 256 ; j++)                                                               // *1 cycles of all colors on wheel
-  {
+  for (j = 0; j < 256 * 5; j++)                                                               // 5 cycles of all colors on wheel
+  { 
     for (i = 0; i < strip.numPixels(); i++)
     {
       strip.setPixelColor(i, Wheel(((i * 256 / strip.numPixels()) + j) & 255));
@@ -295,7 +343,8 @@ void rainbowCycle(uint8_t wait)                                                 
 }
 
 
-uint32_t Wheel(byte WheelPos)                                      // The colours are a transition r - g - b - r - g.... & Input value 0 - 255 to get a color value.
+// The colours are a transition r - g - b - r - g.... ||  Input value 0 - 255 to get a color value.
+uint32_t Wheel(byte WheelPos)
 {
   if (WheelPos < 85)
   {
@@ -322,16 +371,13 @@ uint32_t Wheel(byte WheelPos)                                      // The colour
 void adjustBrightness()                                          // Brightness Check & Adjust
 {
   smooth();                                                      // Averages photocell readings
-  int clockKnob = analogRead(clockLightIn);                      // Check & Map Potentiometers/Photocell
-  int clockBrightness = map(clockKnob, 0, 1023, 2, 15);
-  int lightKnob = analogRead(nightLightIn);
-  int lightBrightness = map(lightKnob, 0, 1023, 50, 255);        // Backlight
-  int neoBrightness = map(lightKnob, 0, 1023, 1, 200);
+  clockKnob = analogRead(clockLightIn);                          // Check & Map Potentiometers/Photocell
+  clockBrightness = map(clockKnob, 0, 1023, 2, 15);
+  lightKnob = analogRead(nightLightIn);
+  lightBrightness = map(lightKnob, 0, 1023, 50, 255);
   int autoBright1 = map(autoBrightAverage, 1, 1023, 2, 15);
   int autoBright2 = map(autoBrightAverage, 1, 1023, 50, 255);
-
-  strip.setBrightness(neoBrightness);                            // Set Neopixel Brightness
-
+  
   autoBrightState = digitalRead(brightSwitchIn);                 // Adjust Brightness (if Auto Switch On)
   if (autoBrightState == 1)
   {
@@ -344,9 +390,9 @@ void adjustBrightness()                                          // Brightness C
     disp.setBrightness(clockBrightness);                          // Use Potentiometers to Set Brightness
     alpha4.setBrightness(clockBrightness);
     analogWrite(nightLightOut, lightBrightness);
+    strip.setBrightness(lightBrightness);                                      
   }
 }
-
 
 void themeMusic()
 {
@@ -363,11 +409,11 @@ void themeMusic()
     beep(NOTE_C4, 500);
     beep(NOTE_E4, 250);
     beep(NOTE_F4, 250);
-    beep(NOTE_G4, 500);
-    beep(NOTE_C4, 250);
-    beep(NOTE_E4, 250);
-    beep(NOTE_F4, 250);
   }
+  beep(NOTE_G4, 500);
+  beep(NOTE_C4, 250);
+  beep(NOTE_E4, 250);
+  beep(NOTE_F4, 250);
   for (int i = 0; i < 3; i++)
   {
     beep(NOTE_G3, 500);
