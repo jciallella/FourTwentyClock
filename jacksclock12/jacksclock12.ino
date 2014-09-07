@@ -19,9 +19,9 @@
 int photoCellIn =       A1;      // Auto Dimming
 int nightLightIn =      A2;      // Backlight
 int clockLightIn =      A3;      // 7-Sebment
-int NeoPixel =          6;       // RGB-LED: Green
+int reminderSwitchIn =  6;       // Reminder Switch *** NOT WORKING ***
+int NeoPixel =          3;       // RGB-LED: Green
 int uvLED =             7;       // LEDs: UV
-int reminderSwitchIn =  8;       // Reminder Switch *** NOT WORKING ***
 int fourTwentyLED =     9;       // LED: Green
 int piezoOut =          10;      // Speaker
 int nightLightOut =     11;      // Backlight
@@ -40,6 +40,7 @@ int counter;                     // Counts notes played
 int numReadings = 25;            // Smoothing function: # of Readings
 int neoBrightness = 100;         // Neopixel Shield
 boolean running = false;         // Colon On/Off
+//volatile int state = LOW;        // For Reminder Switch Interrupt
 
 // Setup Components
 RTC_DS1307 RTC;
@@ -70,6 +71,8 @@ void setup()
   alpha4.begin(0x71);                                     // Start Alphanumeric
   strip.begin();                                          // Start Neopixel
   strip.show();                                           // Initialize all pixels to 'off'
+
+  attachInterrupt(1, rainbowOff, LOW);                      // Interrupt
 }
 
 
@@ -85,7 +88,6 @@ void loop()
   adjustBrightness();                    // Check Switch & Adjust brightness
   fourTwentyCheck();                     // Check if 4:20pm & Run Alarm
   reminderSwitch();                      // LED / Reminder 
-  if (reminderState == 0) strip.show();  // Turn pixels off
 }
 
 // ================================================================================== //
@@ -217,9 +219,14 @@ void reminderSwitch()                                   // Checks Switch & Activ
   disp.drawColon(true);
   reminderState = digitalRead(reminderSwitchIn);        // Check Reminder Switch
   if (reminderState == HIGH) rainbowCycle(35);             // If On: Run Rainbow Crossfade
-  if (reminderState == LOW) strip.show();                 // Turn pixels off
 }
 
+void rainbowOff()
+{
+   // if (reminderState == LOW)
+    strip.show();                 // Turn pixels off
+}
+  
 
 void smooth()                                           // Cleans up photocell input
 {
