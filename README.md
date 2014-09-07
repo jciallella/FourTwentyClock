@@ -10,3 +10,8 @@ FourTwentyClock
 * Including nightlight (backlight module)
 * Daylight Savings Switch
 * "Reminder" switch that enables Adafruit Neopixel Shield (40 RGB-LED) and fades colors.
+
+Future Improvements
+===============
+* Adjust time (4 buttons: +hour, -hour, +minute, -minute)
+* Mute 4:20 alarm
