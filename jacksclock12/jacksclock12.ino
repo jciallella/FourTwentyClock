@@ -1,7 +1,7 @@
 /* ================================================================================== //
-//    
+//
 //    Jack's 420 Clock
-//    
+//
 //    *** TO DO ***
 //    * Clean up both switch functions
 //    * Auto Dim: Debounce / Smoothing
@@ -15,22 +15,21 @@
 #include "Adafruit_GFX.h"
 #include "RTClib.h"
 #include "pitches.h"
-#include "colordefs.h"
+#include <Adafruit_NeoPixel.h>
 
 // Input/Output Pins
 int photoCellIn = A1;         // Auto Dimming
 int nightLightIn = A2;        // Backlight
-int nightLightOut = 11;       // Backlight
 int clockLightIn = A3;        // 7-Sebment
-int greenOut = 6;             // RGB-LED: Green
-int redOut = 3;               // RGB-LED: Red
-int blueOut = 5;              // RGB-LED: Blue
-int piezoOut = 10;            // Speaker
-int dstSwitchIn = 13;         // Savings Time Switch
-int reminderSwitchIn = 8;     // Reminder Switch *** NOT WORKING ***
-int brightSwitchIn = 12;      // Auto Brightness
-int fourTwentyLED = 9;        // LED: Green
+int NeoPixel = 6;             // RGB-LED: Green
 int uvLED = 7;                // LEDs: UV
+int reminderSwitchIn = 8;     // Reminder Switch *** NOT WORKING ***
+int fourTwentyLED = 9;        // LED: Green
+int piezoOut = 10;            // Speaker
+int nightLightOut = 11;       // Backlight
+int brightSwitchIn = 12;      // Auto Brightness
+int dstSwitchIn = 13;         // Savings Time Switch
+
 
 // Variables
 int clockKnob;                // Potentiometer 1
@@ -49,20 +48,11 @@ boolean running = false;      // Colon On/Off
 int counter = 0;              // Counts notes played
 int numReadings = 25;         // Smoothing function: # of Readings
 
-// Fading Variables
-unsigned long TIME_LED = 0;
-unsigned long TIME_COLOUR = 0;
-byte RED, GREEN, BLUE;
-byte RED_A = 0;
-byte GREEN_A = 0;
-byte BLUE_A = 0;
-int led_delay = 0;
-byte colour_count = 1;
-
-// Setup RTC Clock and Displays
+// Setup Components
 RTC_DS1307 RTC;
 Adafruit_7segment disp = Adafruit_7segment();
 Adafruit_AlphaNum4 alpha4 = Adafruit_AlphaNum4();
+Adafruit_NeoPixel strip = Adafruit_NeoPixel(60, NeoPixel, NEO_GRB + NEO_KHZ800);
 
 // ================================================================================== //
 //                                  *** SETUP ***
@@ -74,24 +64,18 @@ void setup()
   pinMode (nightLightIn, INPUT);        // Nightlight Potentiometer
   pinMode (reminderSwitchIn, INPUT);    // Reminder Switch
   pinMode (brightSwitchIn, INPUT);      // Auto Brightness Switch
-  pinMode (greenOut, OUTPUT);           // RGB LED
-  pinMode (redOut, OUTPUT);             // RGB LED
-  pinMode (blueOut, OUTPUT);            // RGB LED
   pinMode (fourTwentyLED, OUTPUT);      // Green LED
   pinMode (uvLED, OUTPUT);              // UV LED
+  pinMode (NeoPixel, OUTPUT);           // Neopixel
 
   Serial.begin(9600);
   Wire.begin();
-  RTC.begin();
+  RTC.begin();                                            // DSC1730 Clock
   RTC.adjust(DateTime(F(__DATE__), F(__TIME__)));         // Set time at compile
-  disp.begin(0x70);
-  alpha4.begin(0x71);
-  
-  // Setup Fading LED
-  RED = C1_R;
-  GREEN = C1_G;
-  BLUE = C1_B;
-  led_delay = (colour_delay - time_at_colour) / 255;      // Get Delay Time
+  disp.begin(0x70);                                       // Start 7 Segment
+  alpha4.begin(0x71);                                     // Start Alphanumeric
+  strip.begin();                                          // Start Neopixel
+  strip.show();                                           // Initialize all pixels to 'off'
 }
 
 // ================================================================================== //
@@ -106,18 +90,6 @@ void loop()
   adjustBrightness();                    // Check Switch & Adjust brightness
   fourTwentyCheck();                     // Check if 4:20pm & Run Alarm
   reminderSwitch();                      // LED / Reminder
-  Serial.println(reminderState);         //Turn back on when ready to test this function
-
-      if (millis() - TIME_LED >= led_delay)
-    {
-      TIME_LED = millis();
-      LED();                                            // Run LED Function to check & adjust values
-    }
-    if (millis() - TIME_COLOUR >= colour_delay)
-    {
-      TIME_COLOUR = millis();
-      COLOUR();                                         // Run Colour Change function
-    }
 }
 
 // ================================================================================== //
@@ -206,6 +178,7 @@ void displayDay ()                                  // Convert Day Number & Disp
   alpha4.writeDisplay();
 }
 
+
 void fourTwentyCheck()                                 // 420 Check, Blink & Buzz
 {
   DateTime now = RTC.now();
@@ -242,110 +215,43 @@ void fourTwentyWords()                                     // Writes "HIGH" & "T
 // ================================================================================== //
 
 
-void smooth()
+void reminderSwitch()                                   // Checks Switch & Activates LED
 {
-  int readings[numReadings];      // the readings from the analog input
-  int index = 0;                  // the index of the current reading
-  int total = 0;                  // the running total
-  int average = 0;                // the average
+  Serial.println(reminderState);                        // Turn back on when ready to test this function
+  reminderState = digitalRead(reminderSwitchIn);        // Check Reminder Switch
+  if (reminderState == 1)                               // If On: Run Crossfade Part 1 / 3
+  {
+  rainbowCycle(1);
+  }
+  else
+  {
+  strip.show();                                           // Initialize all pixels to 'off'
+  }  
+}
+
+
+void smooth()                                           // Cleans up photocell input
+{
+  int readings[numReadings];                            // the readings from the analog input
+  int index = 0;                                        // the index of the current reading
+  int total = 0;                                        // the running total
+  int average = 0;                                      // the average
 
   for (int thisReading = 0; thisReading < numReadings; thisReading++)
     readings[thisReading] = 0;
   {
-    total = total - readings[index];                // subtract the last reading
-    readings[index] = analogRead(photoCellIn);      // read from the sensor
-    total = total + readings[index];                // add the reading to the total
-    index = index + 1;                              // advance to next position in array
+    total = total - readings[index];                    // subtract the last reading
+    readings[index] = analogRead(photoCellIn);          // read from the sensor
+    total = total + readings[index];                    // add the reading to the total
+    index = index + 1;                                  // advance to next position in array
 
-    if (index >= numReadings)                       // if we're at the end of the array...
+    if (index >= numReadings)                           // if we're at the end of the array...
       index = 0;
 
     average = total / numReadings;
     autoBrightAverage = average;
 
-    delay(1);        // delay in between reads for stability
-  }
-}
-
-
-void reminderSwitch()                                   // Checks Switch & Activates LED
-{
-  reminderState = digitalRead(reminderSwitchIn);        // Check Reminder Switch
-  if (reminderState == 1)                               // If On: Run Crossfade Part 1 / 3
-  {
-    if (millis() - TIME_LED >= led_delay)
-    {
-      TIME_LED = millis();
-      LED();                                            // Run LED Function to check & adjust values
-    }
-    if (millis() - TIME_COLOUR >= colour_delay)
-    {
-      TIME_COLOUR = millis();
-      COLOUR();                                         // Run Colour Change function
-    }
-  }
-  else
-  {
-    analogWrite(redOut, LOW);
-    analogWrite(greenOut, LOW);
-    analogWrite(blueOut, LOW);
-  }
-}
-
-
-void LED()                                                // Crossfader Part 2 / 3
-{ // Check Values and adjust "Active" Value
-  if (RED != RED_A) {
-    if (RED_A > RED) RED_A = RED_A - 1;
-    if (RED_A < RED) RED_A++;
-  }
-  if (GREEN != GREEN_A) {
-    if (GREEN_A > GREEN) GREEN_A = GREEN_A - 1;
-    if (GREEN_A < GREEN) GREEN_A++;
-  }
-  if (BLUE != BLUE_A) {
-    if (BLUE_A > BLUE) BLUE_A = BLUE_A - 1;
-    if (BLUE_A < BLUE) BLUE_A++;
-  }
-  analogWrite(redOut, RED_A);
-  analogWrite(greenOut, GREEN_A);
-  analogWrite(blueOut, BLUE_A);
-}
-
-
-void COLOUR()                                               // Crossfader Part 3 of 3
-{
-  if (colour_count < colour_count_max) colour_count++;
-  if (colour_count == 1 || colour_count == 7) colour_count = -colour_count;
-  if (colour_count == 1)
-  {
-    RED = C1_R;
-    GREEN = C1_G;
-    BLUE = C1_B;
-  } else if (colour_count == 2) {
-    RED = C2_R;
-    GREEN = C2_G;
-    BLUE = C2_B;
-  } else if (colour_count == 3) {
-    RED = C3_R;
-    GREEN = C3_G;
-    BLUE = C3_B;
-  } else if (colour_count == 4) {
-    RED = C4_R;
-    GREEN = C4_G;
-    BLUE = C4_B;
-  } else if (colour_count == 5) {
-    RED = C5_R;
-    GREEN = C5_G;
-    BLUE = C5_B;
-  } else if (colour_count == 6) {
-    RED = C6_R;
-    GREEN = C6_G;
-    BLUE = C6_B;
-  } else if (colour_count == 7) {
-    RED = C7_R;
-    GREEN = C7_G;
-    BLUE = C7_B;
+    delay(1);                                           // delay in between reads for stability
   }
 }
 
@@ -377,24 +283,58 @@ void beep(int note, int duration)                            // Creates Individu
   }
 }
 
+
+void rainbowCycle(uint8_t wait)                                                               // Makes the rainbow equally distributed throughout
+{      
+  uint16_t i, j;
+  for (j = 0; j < 256 * 5; j++)                                                               // 5 cycles of all colors on wheel
+  { 
+    for (i = 0; i < strip.numPixels(); i++)
+    {
+      strip.setPixelColor(i, Wheel(((i * 256 / strip.numPixels()) + j) & 255));
+    }
+    strip.show();
+    delay(wait);
+  }
+}
+
+
+// The colours are a transition r - g - b - r - g.... ||  Input value 0 - 255 to get a color value.
+uint32_t Wheel(byte WheelPos)
+{
+  if (WheelPos < 85)
+  {
+    return strip.Color(WheelPos * 3, 255 - WheelPos * 3, 0);
+  }
+  else if (WheelPos < 170)
+  {
+    WheelPos -= 85;
+    return strip.Color(255 - WheelPos * 3, 0, WheelPos * 3);
+  }
+  else
+  {
+    WheelPos -= 170;
+    return strip.Color(0, WheelPos * 3, 255 - WheelPos * 3);
+  }
+}
+
+
 // ================================================================================== //
 //                             *** OTHER FUNCTIONS ***
 // ================================================================================== //
 
 
-void adjustBrightness()                                // Brightness Check & Adjust
+void adjustBrightness()                                          // Brightness Check & Adjust
 {
-  smooth();                                            // Averages photocell readings
-  
-  clockKnob = analogRead(clockLightIn);                // Check & Map Potentiometers/Photocell
+  smooth();                                                      // Averages photocell readings
+  clockKnob = analogRead(clockLightIn);                          // Check & Map Potentiometers/Photocell
   clockBrightness = map(clockKnob, 0, 1023, 2, 15);
   lightKnob = analogRead(nightLightIn);
   lightBrightness = map(lightKnob, 0, 1023, 50, 255);
-//  photoCellRead = analogRead(photoCellIn);
   int autoBright1 = map(autoBrightAverage, 1, 1023, 2, 15);
   int autoBright2 = map(autoBrightAverage, 1, 1023, 50, 255);
-
-  autoBrightState = digitalRead(brightSwitchIn);          // Adjust Brightness
+  
+  autoBrightState = digitalRead(brightSwitchIn);                 // Adjust Brightness (if Auto Switch On)
   if (autoBrightState == 1)
   {
     disp.setBrightness(autoBright1);
@@ -403,9 +343,10 @@ void adjustBrightness()                                // Brightness Check & Adj
   }
   else
   {
-    disp.setBrightness(clockBrightness);
+    disp.setBrightness(clockBrightness);                          // Use Potentiometers to Set Brightness
     alpha4.setBrightness(clockBrightness);
     analogWrite(nightLightOut, lightBrightness);
+    strip.setBrightness(lightBrightness);                                      
   }
 }
 
@@ -425,10 +366,10 @@ void themeMusic()
     beep(NOTE_E4, 250);
     beep(NOTE_F4, 250);
   }
-    beep(NOTE_G4, 500);
-    beep(NOTE_C4, 250);
-    beep(NOTE_E4, 250);
-    beep(NOTE_F4, 250);
+  beep(NOTE_G4, 500);
+  beep(NOTE_C4, 250);
+  beep(NOTE_E4, 250);
+  beep(NOTE_F4, 250);
   for (int i = 0; i < 3; i++)
   {
     beep(NOTE_G3, 500);
