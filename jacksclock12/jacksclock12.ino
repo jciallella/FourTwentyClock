@@ -42,6 +42,7 @@ int counter;                     // Counts notes played
 int fadeAmount = 2;              // 420 LED
 int neoBrightness = 100;         // Neopixel Shield
 boolean running = false;         // Colon On/Off
+boolean alternate = false;       // Flip 420 Words
 
 // Smoothing Variables
 const int numReadings = 12;
@@ -80,7 +81,7 @@ void setup()
   alpha4.begin(0x71);                                     // Start Alphanumeric
   strip.begin();                                          // Start Neopixel
   strip.show();                                           // Initialize all pixels to 'off'
-  
+
 }
 
 
@@ -107,11 +108,11 @@ int getDecimalTime()                                    // Calculate and Adjust 
 {
   DateTime now = RTC.now();
   int decimalTime = now.hour() * 100 + now.minute();
-  
+
   dstState = digitalRead(dstSwitchIn);                  // Check DST Switch
   if (dstState == 1) decimalTime += 100;                // + / - 1 Hour via Button
   if ((decimalTime > 1159) && !(decimalTime < 1259)) decimalTime -= 1200;
-  
+
   return decimalTime;
 }
 
@@ -187,11 +188,10 @@ void displayDay ()                                  // Convert Day Number & Disp
 
 void fourTwentyCheck()                                 // 420 Check, Blink & Buzz
 {
-  DateTime now = RTC.now();
-  int decimalTime = now.hour() * 100 + now.minute();
-  if (dstState == 1) decimalTime += 100;
+  int decimalTime = getDecimalTime();
   if (decimalTime == 420)
   {
+    disp.blinkRate(2);
     disp.print(getDecimalTime());                      // Write time again, so 4:19 isn't displayed
     disp.writeDisplay();
     fourTwentyWords();
@@ -201,12 +201,15 @@ void fourTwentyCheck()                                 // 420 Check, Blink & Buz
   {
     analogWrite(fourTwentyLED, 0);
     noTone(piezoOut);
+    disp.blinkRate(0);
+    alpha4.blinkRate(0);
   }
 }
 
 
-void fourTwentyWords()                                     // Writes "HIGH" & "TIME" to Alphanumeric Display
+void fourTwentyWords()                                     // Writes "HIGH" & Blinks Alphanumeric Display
 {
+  alpha4.blinkRate(2);
   alpha4.writeDigitAscii(0, 'H');
   alpha4.writeDigitAscii(1, 'I');
   alpha4.writeDigitAscii(2, 'G');
@@ -307,22 +310,22 @@ uint32_t Wheel(byte WheelPos)                                                   
 
 void smooth()                                           // Averages photocell readings
 {
-    total = total - readings[index];                    // subtract the last reading
-    readings[index] = analogRead(photoCellIn);          // read from the sensor
-    total = total + readings[index];                    // add the reading to the total
-    index = index + 1;                                  // advance to next position in array
-    if (index >= numReadings) index = 0;                // if we're at the end of the array...
-    average = total / numReadings;
+  total = total - readings[index];                    // subtract the last reading
+  readings[index] = analogRead(photoCellIn);          // read from the sensor
+  total = total + readings[index];                    // add the reading to the total
+  index = index + 1;                                  // advance to next position in array
+  if (index >= numReadings) index = 0;                // if we're at the end of the array...
+  average = total / numReadings;
 
-    autoBrightAverage = average;
+  autoBrightAverage = average;
 
-    delay(1);                                           // stability delay in between reads 
+  delay(1);                                           // stability delay in between reads
 }
 
 
 void adjustBrightness()                                          // Brightness Check & Adjust
 {
-  smooth();                                                      
+  smooth();
 
   int clockKnob = analogRead(clockLightIn);                      // Check & Map Potentiometers/Photocell
   int clockBrightness = map(clockKnob, 0, 1023, 2, 15);
@@ -331,8 +334,6 @@ void adjustBrightness()                                          // Brightness C
   int autoBright1 = map(autoBrightAverage, 390, 1000, 2, 15);
   int autoBright2 = map(autoBrightAverage, 390, 1000, 50, 255);
 
-  Serial.println(autoBrightAverage);
-  
   autoBrightState = digitalRead(brightSwitchIn);                 // Automatically Adjust Brightness (if Switched ON)
   if (autoBrightState == 1)
   {
@@ -377,5 +378,4 @@ void themeMusic()                                                // Plays game o
     beep(NOTE_D4, 500);
   }
 }
-
 
