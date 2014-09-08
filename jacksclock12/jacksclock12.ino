@@ -15,7 +15,7 @@
 #include "Adafruit_GFX.h"
 #include "RTClib.h"
 #include "pitches.h"
-#include <Adafruit_NeoPixel.h>
+#include "Adafruit_NeoPixel.h"
 
 // Input/Output Pins
 int neoLightIn =        A0;      // Neopixel Dimming
@@ -23,33 +23,34 @@ int photoCellIn =       A1;      // Auto Dimming
 int nightLightIn =      A2;      // Backlight
 int clockLightIn =      A3;      // 7-Sebment
 int neoPixel =          3;       // RGB-LED: Green
-int reminderSwitchIn =  6;       // Reminder Switch
+int dstLightOut =       5;       // Small LED indicating day light savings
+int reminderSwitchIn =  6;       // Switch: Reminder
 int uvLED =             7;       // LEDs: UV
 int fourTwentyLED =     9;       // LED: Green
 int piezoOut =          10;      // Speaker
-int nightLightOut =     11;      // Backlight
-int brightSwitchIn =    12;      // Auto Brightness
-int dstSwitchIn =       13;      // Savings Time Switch
+int nightLightOut =     11;      // LED: Backlight
+int brightSwitchIn =    12;      // Switch: Auto Brightness
+int dstSwitchIn =       13;      // Switch: Savings Time
 
 // Variables
-int dstState;                    // DST
+int dstState = 0;                    // DST
 int reminderState;               // Switch (Reminder)
 int autoBrightState;             // Switch (Auto-Dimmer)
 int photoCellRead;               // Photo Cell
 int autoBrightAverage;           // Photo Cell
-long previousMillis;             // For counting of xfade timer
-int counter;                     // Counts notes played
-int fadeAmount = 2;              // 420 LED
-int neoBrightness = 100;         // Neopixel Shield
-boolean running = false;         // Colon On/Off
-boolean alternate = false;       // Flip 420 Words
+long previousMillis;             // Timer
+int noteCounter;                 // Counts theme music notes
+int neoBrightness =      100;    // Neopixel Shield
+boolean running =        false;  // Colon ON/OFF
+  int buttonPushCounter = 0;   // counter for the number of button presses
+  int lastButtonState = 0;     // previous state of the button
 
-// Smoothing Variables
-const int numReadings = 12;
-int readings[numReadings];      // the readings from the analog input
-int index = 0;                  // the index of the current reading
-int total = 0;                  // the running total
-int average = 0;                // the average
+// Smoothing Variables:
+const int numReadings =  12;      // Number of readings to use (speeds/slows)
+int readings[numReadings];        // Readings from the analog input
+int index = 0;                    // Index of the current reading
+int total = 0;                    // Running total
+int average = 0;                  // Final average
 
 // Setup Components
 RTC_DS1307 RTC;
@@ -69,9 +70,12 @@ void setup()
   pinMode (reminderSwitchIn, INPUT);    // Reminder Switch
   pinMode (neoLightIn, INPUT);          // Neopixel Potentiometer
   pinMode (brightSwitchIn, INPUT);      // Auto Brightness Switch
+  pinMode (photoCellIn, INPUT);         // Photocell
+
   pinMode (fourTwentyLED, OUTPUT);      // Green LED
   pinMode (uvLED, OUTPUT);              // UV LED
   pinMode (neoPixel, OUTPUT);           // Neopixel
+  pinMode (dstLightOut, OUTPUT);        // DST LED
 
   Serial.begin(9600);
   Wire.begin();
@@ -97,20 +101,41 @@ void loop()
   adjustBrightness();                    // Check Switch & Adjust brightness
   fourTwentyCheck();                     // Check if 4:20pm & Run Alarm
   reminderSwitch();                      // LED / Reminder
+  dstHold();
+
+
+  Serial.println(autoBrightAverage);
+
+
 }
 
 // ================================================================================== //
 //                             *** CLOCK FUNCTIONS ***
 // ================================================================================== //
 
+int dstHold()                                          // Holds button press
+{
+
+  dstState = digitalRead(dstSwitchIn);     
+
+  if (dstState != lastButtonState)
+  if (dstState == HIGH) buttonPushCounter++;    // compare the dstState to its previous state
+  lastButtonState = dstState;    //Save current state for next loop
+
+  if (buttonPushCounter == 1) digitalWrite(dstLightOut, HIGH);
+  else
+  {
+  digitalWrite(dstLightOut, LOW); 
+  buttonPushCounter = 0;
+  }
+}
+
 
 int getDecimalTime()                                    // Calculate and Adjust Hours
 {
   DateTime now = RTC.now();
   int decimalTime = now.hour() * 100 + now.minute();
-
-  dstState = digitalRead(dstSwitchIn);                  // Check DST Switch
-  if (dstState == 1) decimalTime += 100;                // + / - 1 Hour via Button
+  if (buttonPushCounter == 1) decimalTime += 100;                // Plus/Minus 1 Hour
   if ((decimalTime > 1159) && !(decimalTime < 1259)) decimalTime -= 1200;
 
   return decimalTime;
@@ -131,7 +156,7 @@ void blinkColon()                                       // Blinks Colon
 }
 
 
-void displayDay ()                                  // Convert Day Number & Display Letters
+void displayDay ()                                      // Convert Day Number & Display Letters
 {
   DateTime now = RTC.now();
   int daynumber = now.dayOfWeek();
@@ -226,14 +251,12 @@ void fourTwentyWords()                                     // Writes "HIGH" & Bl
 
 void reminderSwitch()                                   // Checks Switch & Activates LED
 {
-  disp.drawColon(true);                                 // Updates from otherwise locked 4:19
-
   reminderState = digitalRead(reminderSwitchIn);        // Check Reminder Switch
   if (reminderState == 1) rainbowCycle(25);
-  if (reminderState == 0)
+  else
   {
-    strip.setBrightness(0);
-    strip.show();
+    strip.setBrightness(0);                              // Turning off the shield requires...
+    strip.show();                                        // ... both of these functions
   }
 }
 
@@ -247,7 +270,7 @@ void beep(int note, int duration)                        // Creates Individual N
     previousMillis = currentMillis;
 
     tone(piezoOut, note, duration);                          //Play tone on buzzerPin
-    if (counter % 2 == 0)                                    // Alternate Green then UV LED's
+    if (noteCounter % 2 == 0)                                // Alternate Green then UV LED's
     {
       digitalWrite(fourTwentyLED, HIGH);
       delay(duration);
@@ -260,19 +283,19 @@ void beep(int note, int duration)                        // Creates Individual N
       digitalWrite(uvLED, LOW);
     }
     noTone(piezoOut);
-    counter++;
+    noteCounter++;
   }
 }
 
 
-void rainbowCycle(uint8_t wait)                                                            // Runs rainbow led setup
+void rainbowCycle(uint8_t wait)                             // Runs rainbow led setup
 {
   uint16_t i, j;
   int neoKnob = analogRead(neoLightIn);
   int neoBrightness = map(neoKnob, 0, 1023, 1, 240);
-  strip.setBrightness(neoBrightness);                                                      // Set Neopixel Brightness
+  strip.setBrightness(neoBrightness);                        // Set Neopixel Brightness
 
-  for (j = 0; j < 256 ; j++)                                                               // *1 cycles of all colors on wheel
+  for (j = 0; j < 256 ; j++)                                 // *1 cycles of all colors on wheel
   {
     for (i = 0; i < strip.numPixels(); i++)
     {
@@ -284,7 +307,7 @@ void rainbowCycle(uint8_t wait)                                                 
 }
 
 
-uint32_t Wheel(byte WheelPos)                                                               // Colors transition r - g - b - r - g...
+uint32_t Wheel(byte WheelPos)                                 // Colors transition r - g - b - r - g...
 {
   if (WheelPos < 85)
   {
@@ -325,14 +348,17 @@ void smooth()                                           // Averages photocell re
 
 void adjustBrightness()                                          // Brightness Check & Adjust
 {
+
   smooth();
 
   int clockKnob = analogRead(clockLightIn);                      // Check & Map Potentiometers/Photocell
-  int clockBrightness = map(clockKnob, 0, 1023, 2, 15);
+  int clockBrightness = map(clockKnob, 0, 1023, 1, 15);
   int lightKnob = analogRead(nightLightIn);
-  int lightBrightness = map(lightKnob, 0, 1023, 50, 255);        // Backlight
-  int autoBright1 = map(autoBrightAverage, 390, 1000, 2, 15);
-  int autoBright2 = map(autoBrightAverage, 390, 1000, 50, 255);
+  int lightBrightness = map(lightKnob, 0, 1023, 5, 255);        // Backlight
+
+  photoCellRead = analogRead(photoCellIn);
+  int autoBright1 = map(autoBrightAverage, 300, 1000, 2, 15);
+  int autoBright2 = map(autoBrightAverage, 300, 1000, 25, 240);
 
   autoBrightState = digitalRead(brightSwitchIn);                 // Automatically Adjust Brightness (if Switched ON)
   if (autoBrightState == 1)
