@@ -7,13 +7,13 @@ FourTwentyClock
 * Adafruit 14-segment Alphanumeric Display (displays day of week)
 * At 4:20pm, it plays a tune (currently, Game of Thrones theme) and blinks alternating LED's
 * Auto-dimming Switch (photocell)
-* Daylight Savings Switch
+* Daylight Savings Button
 * Nightlight (backlight module)
 * Potentiometers (3) to adjust brightnesses
 * "Reminder" switch (Adafruit Neopixel Shield (40 RGB-LED)) fades colors.
+* Adjust time manually (4 buttons: +hour, -hour, +minute, -minute)
 
 
 Future Improvements
 ===============
-* Adjust time (4 buttons: +hour, -hour, +minute, -minute)
-* Mute 4:20 alarm
+* Mute 4:20 alarm (if I can find a new pin to spare!) :)
