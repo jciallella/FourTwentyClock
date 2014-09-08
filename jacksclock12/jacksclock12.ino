@@ -18,11 +18,11 @@
 #include "Adafruit_NeoPixel.h"
 
 // Debouncing Items
-#define DEBOUNCE 25                           // # ms (5+ ms is usually plenty)
+#define DEBOUNCE 10                           // # ms (5+ ms is usually plenty)
 #define NUMBUTTONS sizeof(buttons)            // Macro determines size of array, by checking size
 
 byte buttons[] = {2, 3, 4, 5, 12};            // Pins of buttons to be doubounced
-byte pressed[NUMBUTTONS], justpressed[NUMBUTTONS], justreleased[NUMBUTTONS];
+byte down[NUMBUTTONS], pressed[NUMBUTTONS], released[NUMBUTTONS];
 
 // Input/Output Pins
 int neoLightIn =        A0;      // Neopixel Dimming
@@ -97,9 +97,8 @@ void setup()
   pinMode (uvLED, OUTPUT);              // UV LED
   pinMode (neoPixel, OUTPUT);           // Neopixel
 
-  byte buttonCount;                     // Debounce
+  byte buttonCount;                     // Debounce Items
 
-  // Set as input & enable pull-up resistors on switch pins
   for (buttonCount = 0; buttonCount < NUMBUTTONS; buttonCount++)
   {
     pinMode (buttons[buttonCount], INPUT);
@@ -134,7 +133,7 @@ void loop()
 }
 
 // ================================================================================== //
-//                             *** CLOCK FUNCTIONS ***
+//                          *** MAIN CLOCK FUNCTIONS ***
 // ================================================================================== //
 
 
@@ -143,51 +142,58 @@ int getDecimalTime()                                    // Calculate and Adjust 
   DateTime now = RTC.now();
   int decimalTime = now.hour() * 100 + now.minute();
   
-  int temporaryDelay = 500;
+  int bounceDelay = 500;
   
   if (dstButtonCount == 1) decimalTime += 100;                // Plus/Minus 1 Hour
   if (hourCount < 12) decimalTime -= adjustedHour;
   if (minuteCount > 0) decimalTime += adjustedMinute;
   if ((decimalTime > 1159) && !(decimalTime < 1259)) decimalTime -= 1200;
 
+  if ((decimalTime > 1200) && (decimalTime < 100)) hourCount = 0;
+
   int hourPlusState = digitalRead(hourPlusButton);
+  int hourMinusState = digitalRead(hourMinusButton);
+  int minPlusState = digitalRead(minPlusButton);
+  int minMinusState = digitalRead(minMinusButton);
+
   if (hourPlusState == HIGH)
   {
-    if (decimalTime > 1200) hourCount = 0;
-    adjustedHour = hourCount * 100;
-    if (hourCount > 0) decimalTime += adjustedHour;
     hourCount++;
-    delay(temporaryDelay);
+    adjustedHour = hourCount * 100;
+    decimalTime += adjustedHour;
+    delay(bounceDelay);
   }
 
-  int hourMinusState = digitalRead(hourMinusButton);
   if (hourMinusState == HIGH)
   {
-    if (decimalTime < 100) hourCount = 0;
-    adjustedHour = hourCount * -100;
     hourCount--;
-    delay(temporaryDelay);
+    adjustedHour = hourCount * 100;
+    decimalTime += adjustedHour;
+    delay(bounceDelay);
   }
 
-  int minPlusState = digitalRead(minPlusButton);
   if (minPlusState == HIGH)
   {
     if (now.minute() > 59) minuteCount = 0;
     adjustedMinute = minuteCount + 1;
     minuteCount++;
-    delay(temporaryDelay);
+    delay(bounceDelay);
   }
 
-  int minMinusState = digitalRead(minMinusButton);
+
   if (minMinusState == HIGH)
   {
     if (now.minute() < 1) minuteCount = 0;
     adjustedMinute = minuteCount - 1;
     minuteCount--;
-    delay(temporaryDelay);
+    delay(bounceDelay);
   }
   return decimalTime;
 }
+
+// ================================================================================== //
+//                         *** SECONDARY CLOCK FUNCTIONS ***
+// ================================================================================== //
 
 
 void blinkColon()                                       // Blinks Colon
@@ -203,6 +209,33 @@ void blinkColon()                                       // Blinks Colon
   }
 }
 
+void adjustBrightness()                                          // Brightness Check & Adjust
+{
+  smooth();
+
+  int clockKnob = analogRead(clockLightIn);                      // Check & Map Potentiometers/Photocell
+  int clockBrightness = map(clockKnob, 0, 1023, 1, 15);
+  int lightKnob = analogRead(nightLightIn);
+  int lightBrightness = map(lightKnob, 0, 1023, 5, 255);        // Backlight
+
+  photoCellRead = analogRead(photoCellIn);
+  int autoBright1 = map(autoBrightAverage, 300, 1000, 1, 15);
+  int autoBright2 = map(autoBrightAverage, 300, 1000, 1, 255);
+
+  autoBrightState = digitalRead(brightSwitchIn);                 // Automatically Adjust Brightness (if Switched ON)
+  if (autoBrightState == 1)
+  {
+    disp.setBrightness(autoBright1);
+    alpha4.setBrightness(autoBright1);
+    analogWrite(nightLightOut, autoBright2);
+  }
+  else
+  {
+    disp.setBrightness(clockBrightness);                          // Use Potentiometers to Set Brightness
+    alpha4.setBrightness(clockBrightness);
+    analogWrite(nightLightOut, lightBrightness);
+  }
+}
 
 void displayDay ()                                      // Convert Day Number & Display Letters
 {
@@ -296,7 +329,7 @@ int dstHold()                                           // Holds button press
 {
   dstState = digitalRead(dstSwitchIn);
   if (dstState != dstLastState)
-    if (dstState == HIGH) dstButtonCount++;               // Compare the dstState to its previous state
+  if (dstState == HIGH) dstButtonCount++;               // Compare the dstState to its previous state
   dstLastState = dstState;                              // Save current state for next loop
 
   if (dstButtonCount == 1);
@@ -391,7 +424,7 @@ uint32_t Wheel(byte WheelPos)                                 // Colors transiti
 // ================================================================================== //
 
 
-void smooth()                                           // Averages photocell readings
+void smooth()                                         // Averages photocell readings
 {
   total = total - readings[index];                    // subtract the last reading
   readings[index] = analogRead(photoCellIn);          // read from the sensor
@@ -414,62 +447,33 @@ void debounceSwitches()
     static long lasttime;
     byte index;
 
-    if (millis() < lasttime) { // we wrapped around, lets just try again
+    if (millis() < lasttime) {                                    // we wrapped around, try again
       lasttime = millis();
     }
-    if ((lasttime + DEBOUNCE) > millis())          // not enough time has passed to debounce
+    if ((lasttime + DEBOUNCE) > millis())                         // not enough time has passed to debounce
     {
       return;
     }
-    lasttime = millis();  // ok we have waited DEBOUNCE milliseconds, lets reset the timer
+    lasttime = millis();                                          // waited DEBOUNCE milliseconds, reset timer
 
     for (index = 0; index < NUMBUTTONS; index++)
     {
-      currentstate[index] = digitalRead(buttons[index]);   // read the button
+      currentstate[index] = digitalRead(buttons[index]);          // read the button
 
       if (currentstate[index] == previousstate[index])
       {
         if ((pressed[index] == LOW) && (currentstate[index] == LOW))
         {
-          justpressed[index] = 1;
+          pressed[index] = 1;
         }
         else if ((pressed[index] == HIGH) && (currentstate[index] == HIGH))
         {
-          justreleased[index] = 1;
+          released[index] = 1;
         }
-        pressed[index] = !currentstate[index];  // remember, digital HIGH means NOT pressed
+        pressed[index] = !currentstate[index];                   // remember, digital HIGH means NOT pressed
       }
-      previousstate[index] = currentstate[index];   // keep a running tally of the buttons
+      previousstate[index] = currentstate[index];                // keep a running tally of the buttons
     }
-  }
-}
-
-
-void adjustBrightness()                                          // Brightness Check & Adjust
-{
-  smooth();
-
-  int clockKnob = analogRead(clockLightIn);                      // Check & Map Potentiometers/Photocell
-  int clockBrightness = map(clockKnob, 0, 1023, 1, 15);
-  int lightKnob = analogRead(nightLightIn);
-  int lightBrightness = map(lightKnob, 0, 1023, 5, 255);        // Backlight
-
-  photoCellRead = analogRead(photoCellIn);
-  int autoBright1 = map(autoBrightAverage, 300, 1000, 1, 15);
-  int autoBright2 = map(autoBrightAverage, 300, 1000, 1, 255);
-
-  autoBrightState = digitalRead(brightSwitchIn);                 // Automatically Adjust Brightness (if Switched ON)
-  if (autoBrightState == 1)
-  {
-    disp.setBrightness(autoBright1);
-    alpha4.setBrightness(autoBright1);
-    analogWrite(nightLightOut, autoBright2);
-  }
-  else
-  {
-    disp.setBrightness(clockBrightness);                          // Use Potentiometers to Set Brightness
-    alpha4.setBrightness(clockBrightness);
-    analogWrite(nightLightOut, lightBrightness);
   }
 }
 
