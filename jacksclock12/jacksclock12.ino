@@ -22,10 +22,12 @@ int neoLightIn =        A0;      // Neopixel Dimming
 int photoCellIn =       A1;      // Auto Dimming
 int nightLightIn =      A2;      // Backlight
 int clockLightIn =      A3;      // 7-Sebment
-int neoPixel =          3;       // RGB-LED: Green
-int dstLightOut =       5;       // Small LED indicating day light savings
-int reminderSwitchIn =  6;       // Switch: Reminder
+int minPlusButton =     2;
+int hourPlusButton =    4;
+int reminderSwitchIn =  5;       // Switch: Reminder
+int dstLightOut =       6;       // Small LED indicating day light savings
 int uvLED =             7;       // LEDs: UV
+int neoPixel =          8;       // RGB-LED: Green
 int fourTwentyLED =     9;       // LED: Green
 int piezoOut =          10;      // Speaker
 int nightLightOut =     11;      // LED: Backlight
@@ -33,17 +35,23 @@ int brightSwitchIn =    12;      // Switch: Auto Brightness
 int dstSwitchIn =       13;      // Switch: Savings Time
 
 // Variables
-int dstState = 0;                    // DST
+int dstState;                    // DST
 int reminderState;               // Switch (Reminder)
 int autoBrightState;             // Switch (Auto-Dimmer)
 int photoCellRead;               // Photo Cell
 int autoBrightAverage;           // Photo Cell
 long previousMillis;             // Timer
 int noteCounter;                 // Counts theme music notes
+int dstButtonCount;              // counter for the number of button presses
+int dstLastState;                // previous state of the button
+int hourButtonState;             // |
+int hourCount;                   // |
+int minuteCount;                 // | > For manual time adjustment
+int adjustedHour;                // |
+int adjustedMinute;              // |
+int decimalTime;                 // Overall Clock Time
 int neoBrightness =      100;    // Neopixel Shield
 boolean running =        false;  // Colon ON/OFF
-  int buttonPushCounter = 0;   // counter for the number of button presses
-  int lastButtonState = 0;     // previous state of the button
 
 // Smoothing Variables:
 const int numReadings =  12;      // Number of readings to use (speeds/slows)
@@ -71,6 +79,8 @@ void setup()
   pinMode (neoLightIn, INPUT);          // Neopixel Potentiometer
   pinMode (brightSwitchIn, INPUT);      // Auto Brightness Switch
   pinMode (photoCellIn, INPUT);         // Photocell
+  pinMode (minPlusButton, INPUT);       // Minute +
+  pinMode (hourPlusButton, INPUT);      // Hour +
 
   pinMode (fourTwentyLED, OUTPUT);      // Green LED
   pinMode (uvLED, OUTPUT);              // UV LED
@@ -85,7 +95,6 @@ void setup()
   alpha4.begin(0x71);                                     // Start Alphanumeric
   strip.begin();                                          // Start Neopixel
   strip.show();                                           // Initialize all pixels to 'off'
-
 }
 
 
@@ -95,17 +104,14 @@ void setup()
 
 void loop()
 {
+  //  adjustTime();
   disp.print(getDecimalTime());          // Show 12-Hour Time (7 Segment)
   displayDay();                          // Show Weekday: 14 Segment
   blinkColon();                          // Blink Colon
   adjustBrightness();                    // Check Switch & Adjust brightness
   fourTwentyCheck();                     // Check if 4:20pm & Run Alarm
   reminderSwitch();                      // LED / Reminder
-  dstHold();
-
-
-  Serial.println(autoBrightAverage);
-
+  dstHold();                             // Checks for Daylight Savings activation
 
 }
 
@@ -113,31 +119,33 @@ void loop()
 //                             *** CLOCK FUNCTIONS ***
 // ================================================================================== //
 
-int dstHold()                                          // Holds button press
-{
-
-  dstState = digitalRead(dstSwitchIn);     
-
-  if (dstState != lastButtonState)
-  if (dstState == HIGH) buttonPushCounter++;    // compare the dstState to its previous state
-  lastButtonState = dstState;    //Save current state for next loop
-
-  if (buttonPushCounter == 1) digitalWrite(dstLightOut, HIGH);
-  else
-  {
-  digitalWrite(dstLightOut, LOW); 
-  buttonPushCounter = 0;
-  }
-}
-
 
 int getDecimalTime()                                    // Calculate and Adjust Hours
 {
   DateTime now = RTC.now();
   int decimalTime = now.hour() * 100 + now.minute();
-  if (buttonPushCounter == 1) decimalTime += 100;                // Plus/Minus 1 Hour
+  if (dstButtonCount == 1) decimalTime += 100;                // Plus/Minus 1 Hour
+  if (hourCount > 0) decimalTime += adjustedHour;
+  if (minuteCount > 0) decimalTime += minuteCount;
   if ((decimalTime > 1159) && !(decimalTime < 1259)) decimalTime -= 1200;
 
+  int hourButtonState = digitalRead(hourPlusButton);
+  if (hourButtonState == HIGH)
+  {
+    if (decimalTime > 1200) hourCount = 0;
+    adjustedHour = hourCount * 100;
+    hourCount++;
+    delay(400);
+  }
+
+  int minuteButtonState = digitalRead(minPlusButton);
+  if (minuteButtonState == HIGH)
+  {
+    if (now.minute() > 59) minuteCount = 0;
+    adjustedMinute = minuteCount;
+    minuteCount++;
+    delay(400);
+  }
   return decimalTime;
 }
 
@@ -242,6 +250,23 @@ void fourTwentyWords()                                     // Writes "HIGH" & Bl
   alpha4.writeDisplay();
   alpha4.clear();
 }
+
+int dstHold()                                           // Holds button press
+{
+  dstState = digitalRead(dstSwitchIn);
+
+  if (dstState != dstLastState)
+    if (dstState == HIGH) dstButtonCount++;               // Compare the dstState to its previous state
+  dstLastState = dstState;                              // Save current state for next loop
+
+  if (dstButtonCount == 1) digitalWrite(dstLightOut, HIGH);
+  else
+  {
+    digitalWrite(dstLightOut, LOW);
+    dstButtonCount = 0;
+  }
+}
+
 
 
 // ================================================================================== //
@@ -348,7 +373,6 @@ void smooth()                                           // Averages photocell re
 
 void adjustBrightness()                                          // Brightness Check & Adjust
 {
-
   smooth();
 
   int clockKnob = analogRead(clockLightIn);                      // Check & Map Potentiometers/Photocell
@@ -357,8 +381,8 @@ void adjustBrightness()                                          // Brightness C
   int lightBrightness = map(lightKnob, 0, 1023, 5, 255);        // Backlight
 
   photoCellRead = analogRead(photoCellIn);
-  int autoBright1 = map(autoBrightAverage, 300, 1000, 2, 15);
-  int autoBright2 = map(autoBrightAverage, 300, 1000, 25, 240);
+  int autoBright1 = map(autoBrightAverage, 300, 1000, 1, 15);
+  int autoBright2 = map(autoBrightAverage, 300, 1000, 1, 255);
 
   autoBrightState = digitalRead(brightSwitchIn);                 // Automatically Adjust Brightness (if Switched ON)
   if (autoBrightState == 1)
@@ -404,4 +428,5 @@ void themeMusic()                                                // Plays game o
     beep(NOTE_D4, 500);
   }
 }
+
 
