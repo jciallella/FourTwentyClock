@@ -2,7 +2,7 @@
 //
 //    Jack's 4:20 Clock
 //    Last Update: 9-7-2014
-//    Version 0.8
+//    Version 0.9
 //    Written for Arduino Uno Rev. 3
 //    Adafruit Hardware: Real Time Clock: DS1307, Neopixel (40 RGB-LED) Shield,
 //    7-Segment Display, 14-Segment Aphanumeric Display, Backlight Module
@@ -22,10 +22,11 @@ int neoLightIn =        A0;      // Neopixel Dimming
 int photoCellIn =       A1;      // Auto Dimming
 int nightLightIn =      A2;      // Backlight
 int clockLightIn =      A3;      // 7-Sebment
-int minPlusButton =     2;
-int hourPlusButton =    4;
-int reminderSwitchIn =  5;       // Switch: Reminder
-int dstLightOut =       6;       // Small LED indicating day light savings
+int minPlusButton =     2;       // Timekeeping
+int minMinusButton =    3;       // Timekeeping
+int hourPlusButton =    4;       // Timekeeping
+int hourMinusButton =   5;       // Timekeeping
+int reminderSwitchIn =  6;       // Switch: Reminder
 int uvLED =             7;       // LEDs: UV
 int neoPixel =          8;       // RGB-LED: Green
 int fourTwentyLED =     9;       // LED: Green
@@ -42,16 +43,17 @@ int photoCellRead;               // Photo Cell
 int autoBrightAverage;           // Photo Cell
 long previousMillis;             // Timer
 int noteCounter;                 // Counts theme music notes
-int dstButtonCount;              // counter for the number of button presses
-int dstLastState;                // previous state of the button
-int hourButtonState;             // |
+int decimalTime;                 // Overall Clock Time
+int neoBrightness =      100;    // Neopixel Shield
+boolean running =        false;  // Colon ON/OFF
+
+// Hour Adjustment Variables
 int hourCount;                   // |
 int minuteCount;                 // | > For manual time adjustment
 int adjustedHour;                // |
 int adjustedMinute;              // |
-int decimalTime;                 // Overall Clock Time
-int neoBrightness =      100;    // Neopixel Shield
-boolean running =        false;  // Colon ON/OFF
+int dstButtonCount;              // counter for the number of button presses
+int dstLastState;                // previous state of dst button
 
 // Smoothing Variables:
 const int numReadings =  12;      // Number of readings to use (speeds/slows)
@@ -81,11 +83,12 @@ void setup()
   pinMode (photoCellIn, INPUT);         // Photocell
   pinMode (minPlusButton, INPUT);       // Minute +
   pinMode (hourPlusButton, INPUT);      // Hour +
+  pinMode (minMinusButton, INPUT);      // Minute -
+  pinMode (hourMinusButton, INPUT);     // Hour -
 
   pinMode (fourTwentyLED, OUTPUT);      // Green LED
   pinMode (uvLED, OUTPUT);              // UV LED
   pinMode (neoPixel, OUTPUT);           // Neopixel
-  pinMode (dstLightOut, OUTPUT);        // DST LED
 
   Serial.begin(9600);
   Wire.begin();
@@ -104,15 +107,13 @@ void setup()
 
 void loop()
 {
-  //  adjustTime();
-  disp.print(getDecimalTime());          // Show 12-Hour Time (7 Segment)
+  disp.print(getDecimalTime());              // Show 12-Hour Time (7 Segment)
   displayDay();                          // Show Weekday: 14 Segment
   blinkColon();                          // Blink Colon
   adjustBrightness();                    // Check Switch & Adjust brightness
   fourTwentyCheck();                     // Check if 4:20pm & Run Alarm
   reminderSwitch();                      // LED / Reminder
   dstHold();                             // Checks for Daylight Savings activation
-
 }
 
 // ================================================================================== //
@@ -126,25 +127,45 @@ int getDecimalTime()                                    // Calculate and Adjust 
   int decimalTime = now.hour() * 100 + now.minute();
   if (dstButtonCount == 1) decimalTime += 100;                // Plus/Minus 1 Hour
   if (hourCount > 0) decimalTime += adjustedHour;
-  if (minuteCount > 0) decimalTime += minuteCount;
+  if (minuteCount > 0) decimalTime += adjustedMinute;
+  int temporaryDelay = 100;
+
   if ((decimalTime > 1159) && !(decimalTime < 1259)) decimalTime -= 1200;
 
-  int hourButtonState = digitalRead(hourPlusButton);
-  if (hourButtonState == HIGH)
+  int hourPlusState = digitalRead(hourPlusButton);
+  if (hourPlusState == HIGH)
   {
     if (decimalTime > 1200) hourCount = 0;
     adjustedHour = hourCount * 100;
     hourCount++;
-    delay(400);
+    delay(temporaryDelay);
   }
 
-  int minuteButtonState = digitalRead(minPlusButton);
-  if (minuteButtonState == HIGH)
+  int hourMinusState = digitalRead(hourMinusButton);
+  if (hourMinusState == HIGH)
+  {
+    if (decimalTime < 100) hourCount = 0;
+    adjustedHour = hourCount * -100;
+    hourCount++;
+    delay(temporaryDelay);
+  }
+
+  int minPlusState = digitalRead(minPlusButton);
+  if (minPlusState == HIGH)
   {
     if (now.minute() > 59) minuteCount = 0;
     adjustedMinute = minuteCount;
     minuteCount++;
-    delay(400);
+    delay(temporaryDelay);
+  }
+
+  int minMinusState = digitalRead(minMinusButton);
+  if (minMinusState == HIGH)
+  {
+    if (now.minute() < 1) minuteCount = 0;
+    adjustedMinute = minuteCount * -1;
+    minuteCount++;
+    delay(temporaryDelay);
   }
   return decimalTime;
 }
@@ -251,22 +272,17 @@ void fourTwentyWords()                                     // Writes "HIGH" & Bl
   alpha4.clear();
 }
 
+
 int dstHold()                                           // Holds button press
 {
   dstState = digitalRead(dstSwitchIn);
-
   if (dstState != dstLastState)
-    if (dstState == HIGH) dstButtonCount++;               // Compare the dstState to its previous state
+  if (dstState == HIGH) dstButtonCount++;               // Compare the dstState to its previous state
   dstLastState = dstState;                              // Save current state for next loop
-
-  if (dstButtonCount == 1) digitalWrite(dstLightOut, HIGH);
-  else
-  {
-    digitalWrite(dstLightOut, LOW);
-    dstButtonCount = 0;
-  }
+  
+  if (dstButtonCount == 1);
+  else dstButtonCount = 0;
 }
-
 
 
 // ================================================================================== //
@@ -306,7 +322,7 @@ void beep(int note, int duration)                        // Creates Individual N
       digitalWrite(uvLED, HIGH);
       delay(duration);
       digitalWrite(uvLED, LOW);
-    }
+    }   
     noTone(piezoOut);
     noteCounter++;
   }
@@ -317,7 +333,7 @@ void rainbowCycle(uint8_t wait)                             // Runs rainbow led 
 {
   uint16_t i, j;
   int neoKnob = analogRead(neoLightIn);
-  int neoBrightness = map(neoKnob, 0, 1023, 1, 240);
+  int neoBrightness = map(neoKnob, 0, 1023, 1, 225);
   strip.setBrightness(neoBrightness);                        // Set Neopixel Brightness
 
   for (j = 0; j < 256 ; j++)                                 // *1 cycles of all colors on wheel
