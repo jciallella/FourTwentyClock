@@ -141,9 +141,9 @@ int getDecimalTime()                                    // Calculate and Adjust 
 {
   DateTime now = RTC.now();
   int decimalTime = now.hour() * 100 + now.minute();
-  
+
   int bounceDelay = 500;
-  
+
   if (dstButtonCount == 1) decimalTime += 100;                // Plus/Minus 1 Hour
   if (hourCount < 12) decimalTime -= adjustedHour;
   if (minuteCount > 0) decimalTime += adjustedMinute;
@@ -191,6 +191,35 @@ int getDecimalTime()                                    // Calculate and Adjust 
   return decimalTime;
 }
 
+
+void displayDay ()                                      // Grab Day Number & Display Letters
+{
+  DateTime now = RTC.now();
+  int daynumber = now.dayOfWeek();
+  int slot[] = {0, 1, 2, 3}; 
+  char dayLetters[4];
+
+  char sunday[] =     {'S', 'U', 'N', ' '};
+  char monday[] =     {'M', 'O', 'N', ' '};
+  char tuesday[] =    {'T', 'U', 'E', 'S'};
+  char wednesday[] =  {'W', 'E', 'D', ' '};
+  char thursday[] =   {'T', 'H', 'U', 'R'};
+  char friday[] =     {'F', 'R', 'I', ' '};
+  char saturday[] =   {'S', 'A', 'T', ' '};
+  
+  if (daynumber == 0) strcpy (dayLetters, sunday);
+  if (daynumber == 1) strcpy (dayLetters, monday);
+  if (daynumber == 2) strcpy (dayLetters, tuesday);
+  if (daynumber == 3) strcpy (dayLetters, wednesday);
+  if (daynumber == 4) strcpy (dayLetters, thursday);
+  if (daynumber == 5) strcpy (dayLetters, friday);
+  if (daynumber == 6) strcpy (dayLetters, saturday);  
+
+  for (int n = 0; n < 4; n++) alpha4.writeDigitAscii(slot[n], dayLetters[n]);
+  alpha4.writeDisplay();
+}
+
+
 // ================================================================================== //
 //                         *** SECONDARY CLOCK FUNCTIONS ***
 // ================================================================================== //
@@ -208,6 +237,7 @@ void blinkColon()                                       // Blinks Colon
     disp.writeDisplay();
   }
 }
+
 
 void adjustBrightness()                                          // Brightness Check & Adjust
 {
@@ -235,60 +265,6 @@ void adjustBrightness()                                          // Brightness C
     alpha4.setBrightness(clockBrightness);
     analogWrite(nightLightOut, lightBrightness);
   }
-}
-
-void displayDay ()                                      // Convert Day Number & Display Letters
-{
-  DateTime now = RTC.now();
-  int daynumber = now.dayOfWeek();
-
-  switch (daynumber)
-  {
-    case 0:
-      alpha4.writeDigitAscii(0, 'S');
-      alpha4.writeDigitAscii(1, 'U');
-      alpha4.writeDigitAscii(2, 'N');
-      break;
-
-    case 1:
-      alpha4.writeDigitAscii(0, 'M');
-      alpha4.writeDigitAscii(1, 'O');
-      alpha4.writeDigitAscii(2, 'N');
-      break;
-
-    case 2:
-      alpha4.writeDigitAscii(0, 'T');
-      alpha4.writeDigitAscii(1, 'U');
-      alpha4.writeDigitAscii(2, 'E');
-      alpha4.writeDigitAscii(3, 'S');
-      break;
-
-    case 3:
-      alpha4.writeDigitAscii(0, 'W');
-      alpha4.writeDigitAscii(1, 'E');
-      alpha4.writeDigitAscii(2, 'D');
-      break;
-
-    case 4:
-      alpha4.writeDigitAscii(0, 'T');
-      alpha4.writeDigitAscii(1, 'H');
-      alpha4.writeDigitAscii(2, 'U');
-      alpha4.writeDigitAscii(3, 'R');
-      break;
-
-    case 5:
-      alpha4.writeDigitAscii(0, 'F');
-      alpha4.writeDigitAscii(1, 'R');
-      alpha4.writeDigitAscii(2, 'I');
-      break;
-
-    case 6:
-      alpha4.writeDigitAscii(0, 'S');
-      alpha4.writeDigitAscii(1, 'A');
-      alpha4.writeDigitAscii(2, 'T');
-      break;
-  }
-  alpha4.writeDisplay();
 }
 
 
@@ -329,7 +305,7 @@ int dstHold()                                           // Holds button press
 {
   dstState = digitalRead(dstSwitchIn);
   if (dstState != dstLastState)
-  if (dstState == HIGH) dstButtonCount++;               // Compare the dstState to its previous state
+    if (dstState == HIGH) dstButtonCount++;               // Compare the dstState to its previous state
   dstLastState = dstState;                              // Save current state for next loop
 
   if (dstButtonCount == 1);
@@ -447,19 +423,13 @@ void debounceSwitches()
     static long lasttime;
     byte index;
 
-    if (millis() < lasttime) {                                    // we wrapped around, try again
-      lasttime = millis();
-    }
-    if ((lasttime + DEBOUNCE) > millis())                         // not enough time has passed to debounce
-    {
-      return;
-    }
+    if (millis() < lasttime) lasttime = millis();                                  // we wrapped around, try again
+    if ((lasttime + DEBOUNCE) > millis()) return;                         // not enough time has passed to debounce
     lasttime = millis();                                          // waited DEBOUNCE milliseconds, reset timer
 
     for (index = 0; index < NUMBUTTONS; index++)
     {
       currentstate[index] = digitalRead(buttons[index]);          // read the button
-
       if (currentstate[index] == previousstate[index])
       {
         if ((pressed[index] == LOW) && (currentstate[index] == LOW))
