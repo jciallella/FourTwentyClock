@@ -2,7 +2,7 @@
 //
 //    Jack's 4:20 Clock
 //    Last Update: 9-7-2014
-//    Version 0.9
+//    Version 0.95
 //    Written for Arduino Uno Rev. 3
 //    Adafruit Hardware: Real Time Clock: DS1307, Neopixel (40 RGB-LED) Shield,
 //    7-Segment Display, 14-Segment Aphanumeric Display, Backlight Module
@@ -125,6 +125,7 @@ void loop()
   disp.print(getDecimalTime());          // Show 12-Hour Time (7 Segment)
   displayDay();                          // Show Weekday: 14 Segment
   blinkColon();                          // Blink Colon
+  smooth();
   adjustBrightness();                    // Check Switch & Adjust brightness
   fourTwentyCheck();                     // Check if 4:20pm & Run Alarm
   reminderSwitch();                      // LED / Reminder
@@ -156,7 +157,7 @@ int getDecimalTime()                                    // Calculate and Adjust 
   int minPlusState = digitalRead(minPlusButton);
   int minMinusState = digitalRead(minMinusButton);
 
-  if (hourPlusState == HIGH)
+  if (hourPlusState == HIGH)                                   // Hour+ Button
   {
     hourCount++;
     adjustedHour = hourCount * 100;
@@ -164,7 +165,7 @@ int getDecimalTime()                                    // Calculate and Adjust 
     delay(bounceDelay);
   }
 
-  if (hourMinusState == HIGH)
+  if (hourMinusState == HIGH)                                   // Hour- Button
   {
     hourCount--;
     adjustedHour = hourCount * 100;
@@ -172,7 +173,7 @@ int getDecimalTime()                                    // Calculate and Adjust 
     delay(bounceDelay);
   }
 
-  if (minPlusState == HIGH)
+  if (minPlusState == HIGH)                                      // Minute+ Button
   {
     if (now.minute() > 59) minuteCount = 0;
     adjustedMinute = minuteCount + 1;
@@ -181,7 +182,7 @@ int getDecimalTime()                                    // Calculate and Adjust 
   }
 
 
-  if (minMinusState == HIGH)
+  if (minMinusState == HIGH)                                     // Minute- Button
   {
     if (now.minute() < 1) minuteCount = 0;
     adjustedMinute = minuteCount - 1;
@@ -192,11 +193,11 @@ int getDecimalTime()                                    // Calculate and Adjust 
 }
 
 
-void displayDay ()                                      // Grab Day Number & Display Letters
+void displayDay ()                                // Grab Day Number & Display Letters
 {
   DateTime now = RTC.now();
   int daynumber = now.dayOfWeek();
-  int slot[] = {0, 1, 2, 3}; 
+  int slot[] = {0, 1, 2, 3};
   char dayLetters[4];
 
   char sunday[] =     {'S', 'U', 'N', ' '};
@@ -206,14 +207,14 @@ void displayDay ()                                      // Grab Day Number & Dis
   char thursday[] =   {'T', 'H', 'U', 'R'};
   char friday[] =     {'F', 'R', 'I', ' '};
   char saturday[] =   {'S', 'A', 'T', ' '};
-  
+
   if (daynumber == 0) strcpy (dayLetters, sunday);
   if (daynumber == 1) strcpy (dayLetters, monday);
   if (daynumber == 2) strcpy (dayLetters, tuesday);
   if (daynumber == 3) strcpy (dayLetters, wednesday);
   if (daynumber == 4) strcpy (dayLetters, thursday);
   if (daynumber == 5) strcpy (dayLetters, friday);
-  if (daynumber == 6) strcpy (dayLetters, saturday);  
+  if (daynumber == 6) strcpy (dayLetters, saturday);
 
   for (int n = 0; n < 4; n++) alpha4.writeDigitAscii(slot[n], dayLetters[n]);
   alpha4.writeDisplay();
@@ -241,7 +242,7 @@ void blinkColon()                                       // Blinks Colon
 
 void adjustBrightness()                                          // Brightness Check & Adjust
 {
-  smooth();
+
 
   int clockKnob = analogRead(clockLightIn);                      // Check & Map Potentiometers/Photocell
   int clockBrightness = map(clockKnob, 0, 1023, 1, 15);
@@ -249,8 +250,8 @@ void adjustBrightness()                                          // Brightness C
   int lightBrightness = map(lightKnob, 0, 1023, 5, 255);        // Backlight
 
   photoCellRead = analogRead(photoCellIn);
-  int autoBright1 = map(autoBrightAverage, 300, 1000, 1, 15);
-  int autoBright2 = map(autoBrightAverage, 300, 1000, 1, 255);
+  int autoBright1 = map(autoBrightAverage, 300, 1023, 1, 15);
+  int autoBright2 = map(autoBrightAverage, 300, 1023, 50, 255);
 
   autoBrightState = digitalRead(brightSwitchIn);                 // Automatically Adjust Brightness (if Switched ON)
   if (autoBrightState == 1)
