@@ -17,6 +17,13 @@
 #include "pitches.h"
 #include "Adafruit_NeoPixel.h"
 
+// Debouncing Items
+#define DEBOUNCE 25                           // # ms (5+ ms is usually plenty)
+#define NUMBUTTONS sizeof(buttons)            // Macro determines size of array, by checking size
+
+byte buttons[] = {2, 3, 4, 5, 12};            // Pins of buttons to be doubounced
+byte pressed[NUMBUTTONS], justpressed[NUMBUTTONS], justreleased[NUMBUTTONS];
+
 // Input/Output Pins
 int neoLightIn =        A0;      // Neopixel Dimming
 int photoCellIn =       A1;      // Auto Dimming
@@ -48,8 +55,8 @@ int neoBrightness =      100;    // Neopixel Shield
 boolean running =        false;  // Colon ON/OFF
 
 // Hour Adjustment Variables
-int hourCount;                   // |
-int minuteCount;                 // | > For manual time adjustment
+int hourCount;                   // | > For manual time adjustment
+int minuteCount;                 // |
 int adjustedHour;                // |
 int adjustedMinute;              // |
 int dstButtonCount;              // counter for the number of button presses
@@ -90,6 +97,15 @@ void setup()
   pinMode (uvLED, OUTPUT);              // UV LED
   pinMode (neoPixel, OUTPUT);           // Neopixel
 
+  byte buttonCount;                     // Debounce
+
+  // Set as input & enable pull-up resistors on switch pins
+  for (buttonCount = 0; buttonCount < NUMBUTTONS; buttonCount++)
+  {
+    pinMode (buttons[buttonCount], INPUT);
+    digitalWrite(buttons[buttonCount], HIGH);
+  }
+
   Serial.begin(9600);
   Wire.begin();
   RTC.begin();                                            // DSC1730 Clock
@@ -107,13 +123,14 @@ void setup()
 
 void loop()
 {
-  disp.print(getDecimalTime());              // Show 12-Hour Time (7 Segment)
+  disp.print(getDecimalTime());          // Show 12-Hour Time (7 Segment)
   displayDay();                          // Show Weekday: 14 Segment
   blinkColon();                          // Blink Colon
   adjustBrightness();                    // Check Switch & Adjust brightness
   fourTwentyCheck();                     // Check if 4:20pm & Run Alarm
   reminderSwitch();                      // LED / Reminder
   dstHold();                             // Checks for Daylight Savings activation
+  debounceSwitches();                    // Debounce (check state of press)
 }
 
 // ================================================================================== //
@@ -125,11 +142,12 @@ int getDecimalTime()                                    // Calculate and Adjust 
 {
   DateTime now = RTC.now();
   int decimalTime = now.hour() * 100 + now.minute();
+  
+  int temporaryDelay = 500;
+  
   if (dstButtonCount == 1) decimalTime += 100;                // Plus/Minus 1 Hour
-  if (hourCount > 0) decimalTime += adjustedHour;
+  if (hourCount < 12) decimalTime -= adjustedHour;
   if (minuteCount > 0) decimalTime += adjustedMinute;
-  int temporaryDelay = 100;
-
   if ((decimalTime > 1159) && !(decimalTime < 1259)) decimalTime -= 1200;
 
   int hourPlusState = digitalRead(hourPlusButton);
@@ -137,6 +155,7 @@ int getDecimalTime()                                    // Calculate and Adjust 
   {
     if (decimalTime > 1200) hourCount = 0;
     adjustedHour = hourCount * 100;
+    if (hourCount > 0) decimalTime += adjustedHour;
     hourCount++;
     delay(temporaryDelay);
   }
@@ -146,7 +165,7 @@ int getDecimalTime()                                    // Calculate and Adjust 
   {
     if (decimalTime < 100) hourCount = 0;
     adjustedHour = hourCount * -100;
-    hourCount++;
+    hourCount--;
     delay(temporaryDelay);
   }
 
@@ -154,7 +173,7 @@ int getDecimalTime()                                    // Calculate and Adjust 
   if (minPlusState == HIGH)
   {
     if (now.minute() > 59) minuteCount = 0;
-    adjustedMinute = minuteCount;
+    adjustedMinute = minuteCount + 1;
     minuteCount++;
     delay(temporaryDelay);
   }
@@ -163,8 +182,8 @@ int getDecimalTime()                                    // Calculate and Adjust 
   if (minMinusState == HIGH)
   {
     if (now.minute() < 1) minuteCount = 0;
-    adjustedMinute = minuteCount * -1;
-    minuteCount++;
+    adjustedMinute = minuteCount - 1;
+    minuteCount--;
     delay(temporaryDelay);
   }
   return decimalTime;
@@ -277,9 +296,9 @@ int dstHold()                                           // Holds button press
 {
   dstState = digitalRead(dstSwitchIn);
   if (dstState != dstLastState)
-  if (dstState == HIGH) dstButtonCount++;               // Compare the dstState to its previous state
+    if (dstState == HIGH) dstButtonCount++;               // Compare the dstState to its previous state
   dstLastState = dstState;                              // Save current state for next loop
-  
+
   if (dstButtonCount == 1);
   else dstButtonCount = 0;
 }
@@ -322,7 +341,7 @@ void beep(int note, int duration)                        // Creates Individual N
       digitalWrite(uvLED, HIGH);
       delay(duration);
       digitalWrite(uvLED, LOW);
-    }   
+    }
     noTone(piezoOut);
     noteCounter++;
   }
@@ -384,6 +403,45 @@ void smooth()                                           // Averages photocell re
   autoBrightAverage = average;
 
   delay(1);                                           // stability delay in between reads
+}
+
+void debounceSwitches()
+{
+  for (byte i = 0; i < NUMBUTTONS; i++)
+  {
+    static byte previousstate[NUMBUTTONS];
+    static byte currentstate[NUMBUTTONS];
+    static long lasttime;
+    byte index;
+
+    if (millis() < lasttime) { // we wrapped around, lets just try again
+      lasttime = millis();
+    }
+    if ((lasttime + DEBOUNCE) > millis())          // not enough time has passed to debounce
+    {
+      return;
+    }
+    lasttime = millis();  // ok we have waited DEBOUNCE milliseconds, lets reset the timer
+
+    for (index = 0; index < NUMBUTTONS; index++)
+    {
+      currentstate[index] = digitalRead(buttons[index]);   // read the button
+
+      if (currentstate[index] == previousstate[index])
+      {
+        if ((pressed[index] == LOW) && (currentstate[index] == LOW))
+        {
+          justpressed[index] = 1;
+        }
+        else if ((pressed[index] == HIGH) && (currentstate[index] == HIGH))
+        {
+          justreleased[index] = 1;
+        }
+        pressed[index] = !currentstate[index];  // remember, digital HIGH means NOT pressed
+      }
+      previousstate[index] = currentstate[index];   // keep a running tally of the buttons
+    }
+  }
 }
 
 
