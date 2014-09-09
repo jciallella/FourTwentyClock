@@ -56,9 +56,9 @@ boolean running =        false;  // Colon ON/OFF
 
 // Hour Adjustment Variables
 int hourCount;                   // | > For manual time adjustment
-int minuteCount;                 // |
-int adjustedHour;                // |
-int adjustedMinute;              // |
+int minuteCount;                 // | ^
+int adjustedHour;                // | ^
+int adjustedMinute;              // | ^
 int dstButtonCount;              // counter for the number of button presses
 int dstLastState;                // previous state of dst button
 
