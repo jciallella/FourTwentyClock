@@ -1,6 +1,6 @@
 FourTwentyClock
 ===============
-![ScreenShot]({http://www.artisanjdc.com/images/extraimages/four_twenty_clock_prototype.jpg})
+![Alt text](http://www.artisanjdc.com/images/extraimages/four_twenty_clock_prototype.jpg "Prototype")
 * This clock has several pieces of hardware all working together
 * Parts purchased from www.adafruit.com
 * DSC1307 Real time clock (reakout board)
