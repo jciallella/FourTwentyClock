@@ -16,4 +16,4 @@ FourTwentyClock
 
 Future Improvements
 ===============
-* Mute 4:20 alarm (if I can find a new pin to spare!) :)
+* Mute 4:20 alarm (need additional pin)
