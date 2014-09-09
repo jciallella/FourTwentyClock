@@ -15,5 +15,5 @@ FourTwentyClock
 
 
 Future Improvements
-===============
+-------------------
 * Mute 4:20 alarm (need additional pin)
