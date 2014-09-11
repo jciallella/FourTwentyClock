@@ -1,6 +1,7 @@
 FourTwentyClock
 ===============
 ![Alt text](http://www.artisanjdc.com/images/extraimages/four_twenty_clock_prototype.jpg "Prototype")
+![Alt text](http://www.artisanjdc.com/images/extraimages/four_twenty_clock_fritzing_wiring_diagram.jpg "Fritzing Diagram")
 * Parts purchased from www.adafruit.com
 * DSC1307 Real time clock (breakout board)
 * Adafruit 7-segment display for clock (12-hour time)
