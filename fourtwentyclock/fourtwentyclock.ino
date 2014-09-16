@@ -1,7 +1,7 @@
 /* ================================================================================== //
 //
 //    Jack's 4:20 Clock
-//    Last Update: 9-7-2014
+//    Last Update: 9-15-2014
 //    Version 0.95
 //    Written for Arduino Uno Rev. 3
 //    Adafruit Hardware: Real Time Clock: DS1307, Neopixel (40 RGB-LED) Shield,
@@ -10,12 +10,13 @@
 // ================================================================================== */
 
 // Libraries
-#include "Wire.h"
 #include "Adafruit_LEDBackpack.h"
-#include "Adafruit_GFX.h"
-#include "RTClib.h"
-#include "pitches.h"
 #include "Adafruit_NeoPixel.h"
+#include "Adafruit_GFX.h"
+#include "Wire.h"
+#include "RTClib.h"
+#include "Pitches.h"
+
 
 // Debouncing Items
 #define DEBOUNCE 10                           // # ms (5+ ms is usually plenty)
@@ -125,7 +126,7 @@ void loop()
   disp.print(getDecimalTime());          // Show 12-Hour Time (7 Segment)
   displayDay();                          // Show Weekday: 14 Segment
   blinkColon();                          // Blink Colon
-  smooth();
+  smooth();                              // Averages photocell input values
   adjustBrightness();                    // Check Switch & Adjust brightness
   fourTwentyCheck();                     // Check if 4:20pm & Run Alarm
   reminderSwitch();                      // LED / Reminder
@@ -148,9 +149,10 @@ int getDecimalTime()                                    // Calculate and Adjust 
   if (dstButtonCount == 1) decimalTime += 100;                // Plus/Minus 1 Hour
   if (hourCount < 12) decimalTime -= adjustedHour;
   if (minuteCount > 0) decimalTime += adjustedMinute;
-  if ((decimalTime > 1159) && !(decimalTime < 1259)) decimalTime -= 1200;
+  if (decimalTime >= 1259) decimalTime -= 1200;
+  if (decimalTime <= 59) decimalTime += 1200;
 
-  if ((decimalTime > 1200) && (decimalTime < 100)) hourCount = 0;
+  if ((decimalTime > 1100) && (decimalTime < 100)) hourCount = 0;
 
   int hourPlusState = digitalRead(hourPlusButton);
   int hourMinusState = digitalRead(hourMinusButton);
@@ -200,13 +202,13 @@ void displayDay ()                                // Grab Day Number & Display L
   int slot[] = {0, 1, 2, 3};
   char dayLetters[4];
 
-  char sunday[] =     {'S', 'U', 'N', ' '};
-  char monday[] =     {'M', 'O', 'N', ' '};
+  char sunday[] =     {' ', 'S', 'U', 'N'};
+  char monday[] =     {' ', 'M', 'O', 'N '};
   char tuesday[] =    {'T', 'U', 'E', 'S'};
-  char wednesday[] =  {'W', 'E', 'D', ' '};
+  char wednesday[] =  {' ', 'W', 'E', 'D'};
   char thursday[] =   {'T', 'H', 'U', 'R'};
-  char friday[] =     {'F', 'R', 'I', ' '};
-  char saturday[] =   {'S', 'A', 'T', ' '};
+  char friday[] =     {' ', 'F', 'R', 'I'};
+  char saturday[] =   {' ', 'S', 'A', 'T'};
 
   if (daynumber == 0) strcpy (dayLetters, sunday);
   if (daynumber == 1) strcpy (dayLetters, monday);
@@ -242,8 +244,6 @@ void blinkColon()                                       // Blinks Colon
 
 void adjustBrightness()                                          // Brightness Check & Adjust
 {
-
-
   int clockKnob = analogRead(clockLightIn);                      // Check & Map Potentiometers/Photocell
   int clockBrightness = map(clockKnob, 0, 1023, 1, 15);
   int lightKnob = analogRead(nightLightIn);
