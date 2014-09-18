@@ -117,13 +117,23 @@ int getDecimalTime()                                    // Calculate and Adjust 
   int decimalTime = now.hour() * 100 + now.minute();
 
   int hourPlusState = digitalRead(hourPlusButton);
+  int hourMinusState = digitalRead(hourMinusButton);
   int minPlusState = digitalRead(minPlusButton);
+  int minMinusState = digitalRead(minMinusButton);
 
   if (hourPlusState == HIGH)                                   // Hour+ Button
   {
     adjustedHour = hourCount * 100;
     decimalTime += adjustedHour;
     hourCount++;
+    delay(bounceDelay);
+  }
+
+  if (hourMinusState == HIGH)                                   // Hour- Button
+  {
+    adjustedHour = hourCount * 100;
+    decimalTime += adjustedHour;
+    hourCount--;
     delay(bounceDelay);
   }
 
@@ -134,18 +144,26 @@ int getDecimalTime()                                    // Calculate and Adjust 
     delay(bounceDelay);
   }
 
+  if (minMinusState == HIGH)                                     // Minute- Button
+  {
+    adjustedMinute = minuteCount - 1;
+    minuteCount--;
+    delay(bounceDelay);
+  }
+
   decimalTime += adjustedHour + adjustedMinute;
+ 
   if (now.hour() + hourCount * 100 > 1100) hourCount = 0;
   if (now.minute() + minuteCount > 58) minuteCount = 0;
+  
   if (decimalTime > 1259) decimalTime -= 1200;
   if (decimalTime < 59) decimalTime += 1200;
-
 
   return decimalTime;
 }
 
 
-void displayDay ()                                // Grab Day Number & Display Letters
+void displayDay ()                                                // Convert Day Number to Display Letters
 {
   DateTime now = RTC.now();
   int daynumber = now.dayOfWeek();
@@ -198,13 +216,13 @@ void adjustBrightness()                                              // Brightne
   int clockBrightness = map(brightReading, 0, 1023, 1, 15);
   neoBrightness =  map(brightReading, 0, 1023, 100, 255);
 
-  int brightSwitchRead = digitalRead(brightSwitch);                  
+  int brightSwitchRead = digitalRead(brightSwitch);
   if (brightSwitchRead == HIGH)
   {
     disp.setBrightness(clockBrightness);
     alpha4.setBrightness(clockBrightness);
   }
-  else strip.setBrightness(neoBrightness);                           
+  else strip.setBrightness(neoBrightness);
 }
 
 
