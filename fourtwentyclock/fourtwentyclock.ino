@@ -3,7 +3,7 @@
 //
 //    Jack's 4:20 Clock
 //    Last Update: 9-18-2014
-//    Version 0.95
+//    Version 0.98
 //    Written for Arduino Uno Rev. 3
 //    Adafruit Hardware: Real Time Clock: DS1307, Neopixel (40 RGB-LED) Shield,
 //    7-Segment Display, 14-Segment Aphanumeric Display, Backlight Module
@@ -185,7 +185,7 @@ void displayDay ()  // Convert Day Number to Display Letters
   char dayLetters[4];
 
   char sunday[] =     {' ', 'S', 'U', 'N'};
-  char monday[] =     {' ', 'M', 'O', 'N '};
+  char monday[] =     {' ', 'M', 'O', 'N'};
   char tuesday[] =    {'T', 'U', 'E', 'S'};
   char wednesday[] =  {' ', 'W', 'E', 'D'};
   char thursday[] =   {'T', 'H', 'U', 'R'};
@@ -254,9 +254,9 @@ void fourTwentyCheck()  // 420 Check, Blink & Buzz
   }
   else
   {
-    noTone(piezoSpeaker);
     disp.blinkRate(0);
     alpha4.blinkRate(0);
+    noTone(piezoSpeaker);
   }
 }
 
@@ -294,6 +294,14 @@ void fourTwentyWords()  // Writes message to alphanumeric & beeps piezo
 // ================================================================================== //
 
 
+
+void ledMatrixOFF()  // Turns neomatrix panel off
+{
+  strip.setBrightness(0);
+  strip.show();                                        
+}
+
+
 int frontLEDCheck()  // Turns front facing LED on/off
 {
   LEDState = digitalRead(frontLEDButton);
@@ -309,13 +317,6 @@ int frontLEDCheck()  // Turns front facing LED on/off
   LEDButtonCount = 0;
   digitalWrite(frontLED, LOW);
   }
-}
-
-// Turns neomatrix panel off
-void ledMatrixOFF()  
-{
-  strip.setBrightness(0);
-  strip.show();                                        
 }
 
 
