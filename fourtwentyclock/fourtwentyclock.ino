@@ -1,7 +1,8 @@
+
 /* ================================================================================== //
 //
 //    Jack's 4:20 Clock
-//    Last Update: 9-7-2014
+//    Last Update: 9-18-2014
 //    Version 0.95
 //    Written for Arduino Uno Rev. 3
 //    Adafruit Hardware: Real Time Clock: DS1307, Neopixel (40 RGB-LED) Shield,
@@ -18,75 +19,84 @@
 #include "Pitches.h"
 
 // Smoothing Variables:
-#define DEBOUNCE 10                           // # ms (5+ ms is usually plenty)
-#define NUMBUTTONS sizeof(buttons)            // Macro determines size of array, by checking size
-byte buttons[] = {2, 3, 4, 5};                // Pins of buttons to be doubounced
-byte down[NUMBUTTONS], pressed[NUMBUTTONS], released[NUMBUTTONS];
+#define DEBOUNCE 10                          // # ms (5+ ms is usually plenty)
+#define numBtns sizeof(buttons)              // Macro determines size of array, by checking size
+byte buttons[] = {2, 3, 4, 5, 11};           // Pins of buttons to be doubounced
+
+byte down[numBtns], pressed[numBtns], released[numBtns];
 
 // Input/Output Pins
-int brightKnob =          A3;      // 7-Sebment
-int minPlusButton =     2;       // Timekeeping
-int minMinusButton =    3;       // Timekeeping
-int hourPlusButton =    4;       // Timekeeping
-int hourMinusButton =   5;       // Timekeeping
-int reminderSwitch =      6;       // Switch: Reminder
-int brightSwitch =        7;
-int piezoOut =            8;       // Speaker
-int neoPixelPin =         10;      // RGB-LED: Green
+int brightKnob =          A3;                // Potentiometer: Brightness
+int minPlusButton =       2;                 // | > For manual time adjustment
+int minMinusButton =      3;                 // | ^
+int hourPlusButton =      4;                 // | ^
+int hourMinusButton =     5;                 // | ^
+int neoPixelSwitch =      6;                 // Switch: Neopixel Matrix
+int brightSwitch =        7;                 // Flip Potentiometer control from displays to matrix
+int piezoSpeaker =        8;                 // Speaker
+int frontLED =            9;                 // Front facing LED (Orange)
+int neoPixelMatrix =      10;                // RGB-LED: Green
+int frontLEDButton =      11;                // Switch for LED
 
 // Variables
-int reminderState;                 // Switch (Reminder)
-int noteCounter;                   // Counts theme music notes
-boolean running =        false;    // Colon ON/OFF
-int decimalTime;                   // Overall Clock Time
-long previousMillis;
-int neoBrightness;
+boolean running =          false;            // Colon ON/OFF
+int pixelSwitchState;                        // Switch state
+int pixelBrightness;                         // Neopixel Matrix Brightness
+int LEDButtonCount;                          // Counter for button presses
+int LEDLastState;                            // Previous state of LED button
+int LEDState;                                // LED Button State
+int noteCounter;                             // Counts theme music notes
+int decimalTime;                             // Calculated Clock Time
+long previousMillis;                         // Delay alternative timer
 
-//Hour Adjustment Variables
-int hourCount;                   // | > For manual time adjustment
-int minuteCount;                 // | ^
-int adjustedHour;                // | ^
-int adjustedMinute;              // | ^
+// Hour Adjustment Variables
+int hourCount;                               // | > For manual time adjustment
+int minuteCount;                             // | ^
+int adjustedHour;                            // | ^
+int adjustedMinute;                          // | ^
 
 // Setup Components
 RTC_DS1307 RTC;
 Adafruit_7segment disp = Adafruit_7segment();
 Adafruit_AlphaNum4 alpha4 = Adafruit_AlphaNum4();
-Adafruit_NeoPixel strip = Adafruit_NeoPixel(60, neoPixelPin, NEO_GRB + NEO_KHZ800);
+Adafruit_NeoPixel strip = Adafruit_NeoPixel(40, neoPixelMatrix, NEO_GRB + NEO_KHZ800);
 
 
 // ================================================================================== //
 //                                  *** SETUP ***
 // ================================================================================== //
 
+
 void setup()
 {
+  byte btnCount;                               // Debounce (Setup Buttons) 
+  for (btnCount = 0; btnCount < numBtns; btnCount++)
+  {
+    pinMode (buttons[btnCount], INPUT);
+    digitalWrite(buttons[btnCount], HIGH);
+  }
+
   pinMode (brightKnob, INPUT);                // Potentiometer
   pinMode (brightSwitch, INPUT);              // Reminder Switch
-  pinMode (reminderSwitch, INPUT);            // Reminder Switch
+  pinMode (neoPixelSwitch, INPUT);            // Reminder Switch
   pinMode (minPlusButton, INPUT);             // Minute +
   pinMode (hourPlusButton, INPUT);            // Hour +
   pinMode (minMinusButton, INPUT);            // Minute -
   pinMode (hourMinusButton, INPUT);           // Hour -
-  pinMode (piezoOut, OUTPUT);                 // Speaker
-  pinMode (neoPixelPin, OUTPUT);              // Neopixel
+  pinMode (frontLEDButton, INPUT);            // LED Switch
 
-  // Debounce
-  byte buttonCount;
-  for (buttonCount = 0; buttonCount < NUMBUTTONS; buttonCount++)
-  {
-    pinMode (buttons[buttonCount], INPUT);
-    digitalWrite(buttons[buttonCount], HIGH);
-  }
+  pinMode (piezoSpeaker, OUTPUT);                 // Speaker
+  pinMode (neoPixelMatrix, OUTPUT);              // Neopixel
+  pinMode (frontLED, OUTPUT);                // Front LED
 
-  Serial.begin(9600);
-  Wire.begin();
-  RTC.begin();                                            // DSC1730 Clock
-  RTC.adjust(DateTime(F(__DATE__), F(__TIME__)));         // Set time at compile
-  disp.begin(0x70);                                       // Start 7 Segment
-  alpha4.begin(0x71);                                     // Start Alphanumeric
-  strip.begin();                                          // Start Neopixel
-  strip.show();                                           // Initialize all pixels to 'off'
+  Serial.begin(9600);                         // For Serial Debugging
+  Wire.begin();                               // One Wire Library Start
+  RTC.begin();                                // DSC1730 Clock
+  RTC.adjust(DateTime(F(__DATE__), F(__TIME__)));  // Set time at compile
+  disp.begin(0x70);                           // Start 7 Segment
+  alpha4.begin(0x71);                         // Start Alphanumeric
+  strip.begin();                              // Start Neopixel
+  strip.show();                               // Initialize all pixels to 'off'
 }
 
 
@@ -94,22 +104,26 @@ void setup()
 //                                  *** LOOP ***
 // ================================================================================== //
 
+
 void loop()
 {
-  disp.print(getDecimalTime());          // Show 12-Hour Time (7 Segment)
-  displayDay();                          // Show Weekday: 14 Segment
-  blinkColon();                          // Blink Colon
-  adjustBrightness();                    // Check Switch & Adjust brightness
-  fourTwentyCheck();                     // Check if 4:20pm & Run Alarm
-  reminderSwitchCheck();                      // LED / Reminder
-  debounceSwitches();                    // Debounce (check state of press)
+  disp.print(getDecimalTime());              // Show 12-Hour Time (7 Segment)
+  displayDay();                              // Show Weekday: 14 Segment
+  blinkColon();                              // Blink Colon
+  adjustBrightness();                        // Check Switch & Adjust brightness
+  fourTwentyCheck();                         // Check if 4:20pm & Run Alarm
+  pixelSwitchCheck();                     // LED / Reminder
+  frontLEDCheck();                                // Turns on and off front facing LED
+  debounceSwitches();                        // Debounce (check state of press)
 }
+
 
 // ================================================================================== //
 //                          *** MAIN CLOCK FUNCTIONS ***
 // ================================================================================== //
 
-int getDecimalTime()                                    // Calculate and Adjust Hours
+
+int getDecimalTime()  // Calculate and Adjust Hours
 {
   int bounceDelay = 400;
 
@@ -121,7 +135,7 @@ int getDecimalTime()                                    // Calculate and Adjust 
   int minPlusState = digitalRead(minPlusButton);
   int minMinusState = digitalRead(minMinusButton);
 
-  if (hourPlusState == HIGH)                                   // Hour+ Button
+  if (hourPlusState == HIGH)                               // Hour+ Button
   {
     adjustedHour = hourCount * 100;
     decimalTime += adjustedHour;
@@ -129,7 +143,7 @@ int getDecimalTime()                                    // Calculate and Adjust 
     delay(bounceDelay);
   }
 
-  if (hourMinusState == HIGH)                                   // Hour- Button
+  if (hourMinusState == HIGH)                              // Hour- Button
   {
     adjustedHour = hourCount * 100;
     decimalTime += adjustedHour;
@@ -137,14 +151,14 @@ int getDecimalTime()                                    // Calculate and Adjust 
     delay(bounceDelay);
   }
 
-  if (minPlusState == HIGH)                                      // Minute+ Button
+  if (minPlusState == HIGH)                                 // Minute+ Button
   {
     adjustedMinute = minuteCount + 1;
     minuteCount++;
     delay(bounceDelay);
   }
 
-  if (minMinusState == HIGH)                                     // Minute- Button
+  if (minMinusState == HIGH)                                 // Minute- Button
   {
     adjustedMinute = minuteCount - 1;
     minuteCount--;
@@ -152,10 +166,10 @@ int getDecimalTime()                                    // Calculate and Adjust 
   }
 
   decimalTime += adjustedHour + adjustedMinute;
- 
+
   if (now.hour() + hourCount * 100 > 1100) hourCount = 0;
   if (now.minute() + minuteCount > 58) minuteCount = 0;
-  
+
   if (decimalTime > 1259) decimalTime -= 1200;
   if (decimalTime < 59) decimalTime += 1200;
 
@@ -163,7 +177,7 @@ int getDecimalTime()                                    // Calculate and Adjust 
 }
 
 
-void displayDay ()                                                // Convert Day Number to Display Letters
+void displayDay ()  // Convert Day Number to Display Letters                                                
 {
   DateTime now = RTC.now();
   int daynumber = now.dayOfWeek();
@@ -196,7 +210,7 @@ void displayDay ()                                                // Convert Day
 // ================================================================================== //
 
 
-void blinkColon()                                       // Blinks Colon
+void blinkColon()  // Blink Colon
 {
   long interval = 750;
   unsigned long currentMillis = millis();
@@ -210,11 +224,11 @@ void blinkColon()                                       // Blinks Colon
 }
 
 
-void adjustBrightness()                                              // Brightness Check & Adjust
+void adjustBrightness()  // Brightness Check & Adjust
 {
   int brightReading = analogRead(brightKnob);                        // Check & Map Potentiometer
   int clockBrightness = map(brightReading, 0, 1023, 1, 15);
-  neoBrightness =  map(brightReading, 0, 1023, 100, 255);
+  pixelBrightness =  map(brightReading, 0, 1023, 100, 255);
 
   int brightSwitchRead = digitalRead(brightSwitch);
   if (brightSwitchRead == HIGH)
@@ -222,11 +236,11 @@ void adjustBrightness()                                              // Brightne
     disp.setBrightness(clockBrightness);
     alpha4.setBrightness(clockBrightness);
   }
-  else strip.setBrightness(neoBrightness);
+  else strip.setBrightness(pixelBrightness);
 }
 
 
-void fourTwentyCheck()                                 // 420 Check, Blink & Buzz
+void fourTwentyCheck()  // 420 Check, Blink & Buzz
 {
   int decimalTime = getDecimalTime();
   if (decimalTime == 420)
@@ -240,14 +254,14 @@ void fourTwentyCheck()                                 // 420 Check, Blink & Buz
   }
   else
   {
-    noTone(piezoOut);
+    noTone(piezoSpeaker);
     disp.blinkRate(0);
     alpha4.blinkRate(0);
   }
 }
 
 
-void fourTwentyWords()                                     // Writes "HIGH" & Blinks Alphanumeric Display
+void fourTwentyWords()  // Writes message to alphanumeric & beeps piezo
 {
   beep(NOTE_G4, 500);
   beep(NOTE_G4, 500);
@@ -280,31 +294,51 @@ void fourTwentyWords()                                     // Writes "HIGH" & Bl
 // ================================================================================== //
 
 
-void ledMatrixOFF()
+int frontLEDCheck()  // Turns front facing LED on/off
+{
+  LEDState = digitalRead(frontLEDButton);
+  
+  if (LEDState != LEDLastState)                              // Compare the LEDState to its previous state
+  if (LEDState == HIGH) LEDButtonCount++;                    
+  
+  LEDLastState = LEDState;                                   // Save current state for next loop
+  
+  if (LEDButtonCount == 1) digitalWrite(frontLED, HIGH );
+  else 
+  {
+  LEDButtonCount = 0;
+  digitalWrite(frontLED, LOW);
+  }
+}
+
+// Turns neomatrix panel off
+void ledMatrixOFF()  
 {
   strip.setBrightness(0);
-  strip.show();                                        // ... both of these functions
+  strip.show();                                        
 }
 
 
-void reminderSwitchCheck()                                   // Checks Switch & Activates LED
+void pixelSwitchCheck()   // Checks Switch & Activates LED
 {
-  int reminderState = digitalRead(reminderSwitch);        // Check Reminder Switch
-  if (reminderState == HIGH) rainbowCycle(20);
-  else if ((reminderState == LOW) && (decimalTime != 420)) ledMatrixOFF();
+  int pixelSwitchState = digitalRead(neoPixelSwitch);        
+  if (pixelSwitchState == HIGH) rainbowCycle(20);
+  else if ((pixelSwitchState == LOW) && (decimalTime != 420)) ledMatrixOFF();
 }
 
 
-void beep(int note, int duration)                        // Creates Individual Notes & Alternates LED's
+void beep(int note, int duration)  // Creates Individual Notes & Alternates LED's for melody                        
 {
   long interval = 20;
   unsigned long currentMillis = millis();
   if (currentMillis - previousMillis > interval)
   {
     previousMillis = currentMillis;
-    tone(piezoOut, note, duration);                          //Play tone on buzzerPin
-    if (noteCounter % 2 == 0)                                // Alternate Green then UV LED's
+    tone(piezoSpeaker, note, duration);              // Play tone on buzzerPin
+    if (noteCounter % 2 == 0)                    // Alternate Green then Purple
     {
+      digitalWrite(frontLED, LOW);
+      
       uint16_t j;
       for (j = 0; j < 40 ; j++)
       {
@@ -315,6 +349,8 @@ void beep(int note, int duration)                        // Creates Individual N
     }
     else
     {
+      digitalWrite(frontLED, HIGH);
+      
       uint16_t j;
       for (j = 0; j < 40 ; j++)
       {
@@ -323,15 +359,15 @@ void beep(int note, int duration)                        // Creates Individual N
       }
       delay(duration);
     }
-    noTone(piezoOut);
+    noTone(piezoSpeaker);
     noteCounter++;
   }
 }
 
 
-void rainbowCycle(uint8_t wait)                             // Runs rainbow led fade
+void rainbowCycle(uint8_t wait)  // Runs rainbow led fade                             
 {
-  strip.setBrightness(neoBrightness);
+  strip.setBrightness(pixelBrightness);
   uint16_t i, j;
 
   for (j = 0; j < 256 ; j++)
@@ -345,9 +381,9 @@ void rainbowCycle(uint8_t wait)                             // Runs rainbow led 
   }
 }
 
-// Required for rainbowCycle()
-uint32_t Wheel(byte WheelPos)                                 // Colors transition r - g - b - r - g...
-{
+
+uint32_t Wheel(byte WheelPos)  // Colors transition r - g - b - r - g...                               
+{                              // (Req'd for rainbowCycle)
   if (WheelPos < 85)
   {
     return strip.Color(WheelPos * 3, 255 - WheelPos * 3, 0);
@@ -370,20 +406,20 @@ uint32_t Wheel(byte WheelPos)                                 // Colors transiti
 // ================================================================================== //
 
 
-void debounceSwitches()
+void debounceSwitches()  // Smooth button presses
 {
-  for (byte i = 0; i < NUMBUTTONS; i++)
+  for (byte i = 0; i < numBtns; i++)
   {
-    static byte previousstate[NUMBUTTONS];
-    static byte currentstate[NUMBUTTONS];
+    static byte previousstate[numBtns];
+    static byte currentstate[numBtns];
     static long lasttime;
     byte index;
 
-    if (millis() < lasttime) lasttime = millis();                                  // we wrapped around, try again
-    if ((lasttime + DEBOUNCE) > millis()) return;                         // not enough time has passed to debounce
+    if (millis() < lasttime) lasttime = millis();                 // we wrapped around, try again
+    if ((lasttime + DEBOUNCE) > millis()) return;                 // not enough time has passed to debounce
     lasttime = millis();                                          // waited DEBOUNCE milliseconds, reset timer
 
-    for (index = 0; index < NUMBUTTONS; index++)
+    for (index = 0; index < numBtns; index++)
     {
       currentstate[index] = digitalRead(buttons[index]);          // read the button
       if (currentstate[index] == previousstate[index])
@@ -404,7 +440,7 @@ void debounceSwitches()
 }
 
 
-void themeMusic()                                                // Plays game of thones theme
+void themeMusic()  // Plays game of thones theme                                                
 {
   for (int i = 0; i < 3; i++)
   {
